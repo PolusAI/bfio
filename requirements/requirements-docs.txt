@@ -1,0 +1,6 @@
+sphinx_autodoc_typehints==1.11.1
+sphinx-rtd-theme==0.5.0
+./utils/polus-bfio-util/
+numpy==1.19.1
+imagecodecs==2020.5.30
+tifffile==2020.7.4

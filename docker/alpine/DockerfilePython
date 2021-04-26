@@ -1,0 +1,30 @@
+# Get Linux
+FROM python:3.8-alpine
+
+### Things that change rarely between containers
+
+# Create temporary folder
+ARG DATA_DIR="/data"
+ARG EXEC_DIR="/opt/executables"
+RUN mkdir -p ${EXEC_DIR}
+
+# Copy the requirements file
+COPY ./requirements/requirements-alpine.txt ${EXEC_DIR}/
+
+# Install libaec from source
+RUN apk --update add --virtual build-dependencies build-base wget python3-dev \
+    && pip3 install -r  ${EXEC_DIR}/requirements-alpine.txt --no-cache-dir \
+    && apk del build-dependencies
+
+### Things that change frequently between containers
+
+# Copy bfio
+COPY ./bfio/*.py ${EXEC_DIR}/bfio/
+COPY ./setup.py ${EXEC_DIR}
+COPY ./README.md ${EXEC_DIR}
+COPY VERSION ${EXEC_DIR}
+
+# Install bfio, remove the source directory
+RUN pip3 install ${EXEC_DIR}/ --no-cache-dir \
+    && rm -rf ${EXEC_DIR}
+

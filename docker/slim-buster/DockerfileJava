@@ -1,0 +1,29 @@
+### Stage 1: build packages from source
+FROM openjdk:8-slim
+
+# Copy Python 3.9
+COPY --from=python:3.9 / /
+
+RUN apt-get update && \
+    pip3 install --upgrade pip --no-cache-dir
+
+# Copy the requirements file
+COPY ./requirements/requirements-base.txt /
+COPY ./requirements/requirements-java.txt /
+
+# Install requirements
+RUN pip3 install -r  /requirements-base.txt --no-cache-dir && \
+    pip3 install -r  /requirements-java.txt --no-cache-dir && \
+    readlink -f /usr/local/lib/python3.9/site-packages/bioformats/jars/bioformats_package.jar && \
+    rm /usr/local/lib/python3.9/site-packages/bioformats/jars/bioformats_package.jar
+
+RUN pip3 uninstall cython -y
+
+### Stage 2: Copy built files into a clean container
+
+# Create temporary folder
+FROM openjdk:8-slim
+
+COPY --from=python:3.9-slim / /
+
+COPY --from=0 /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages

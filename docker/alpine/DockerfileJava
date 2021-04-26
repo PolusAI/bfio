@@ -1,0 +1,32 @@
+# Get Linux
+FROM openjdk:8-alpine
+
+### Things that change rarely between containers
+COPY --from=python:3.8-alpine / /
+
+# Create temporary folder
+ARG DATA_DIR="/data"
+ARG EXEC_DIR="/opt/executables"
+RUN mkdir -p ${EXEC_DIR}
+
+# Copy the requirements file
+COPY ./requirements/requirements-alpine.txt ${EXEC_DIR}/
+COPY ./requirements/requirements-java.txt ${EXEC_DIR}/
+
+# Copy bfio
+COPY ./bfio/ ${EXEC_DIR}/bfio/
+COPY ./setup.py ${EXEC_DIR}
+COPY ./README.md ${EXEC_DIR}
+COPY VERSION ${EXEC_DIR}
+
+# Install libaec from source
+RUN apk --update add --virtual build-dependencies build-base wget python3-dev \
+    && pip3 install --upgrade cython --no-cache-dir\
+    && pip3 install -r  ${EXEC_DIR}/requirements-alpine.txt --no-cache-dir \
+    && pip3 install -r  ${EXEC_DIR}/requirements-java.txt --no-cache-dir \
+    && pip3 install ${EXEC_DIR} --no-cache-dir \
+    && apk del build-dependencies
+
+RUN python3 --version
+
+RUN rm -rf /usr/lib/python3.6/site-packages/bioformats/jars

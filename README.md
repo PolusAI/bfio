@@ -1,83 +1,65 @@
-# Project Title
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio)
 
-One Paragraph of project description goes here
+[![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
+[![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
+![PyPI - Downloads](https://img.shields.io/pypi/dm/bfio)
+![Bower](https://img.shields.io/bower/l/MI)
 
-This initially appeared on
-[gist](https://gist.github.com/PurpleBooth/109311bb0361f32d87a2), but as
-I can no longer open that page as there are too many comments, I have
-moved it here.
+This tool is a simplified but powerful interface to the
+[Bioformats java library](https://www.openmicroscopy.org/bio-formats/).
+It makes use of parts of Cell Profilers
+[python-bioformats](https://github.com/CellProfiler/python-bioformats)
+package to access the Bioformats library. One of the issues with using the
+`python-bioformats` package is reading and writing large image planes (>2GB).
+The challenge lies in the way Bioformats reads and writes large image planes,
+using an `int` value to index the file. To get around this, files can be read or
+written in chunks and the classes provided in `bfio` handle this automatically.
+The `BioWriter` class in this package only writes files in the `.ome.tif`
+format, and automatically sets the tile sizes to 1024.
+
+Docker containers with all necessary components are available (see
+**Docker Containers** section).
 
 ## Summary
 
-  - [Getting Started](#getting-started)
-  - [Runing the tests](#running-the-tests)
-  - [Deployment](#deployment)
-  - [Build](#build)
+  - [Installation](#installation)
+  - [Documentation](#documentation)
   - [Contributing](#contributing)
   - [Versioning](#versioning)
   - [Authors](#authors)
   - [License](#license)
   - [Acknowledgments](#acknowledgments)
 
-## Getting Started
+## Installation
 
-These instructions will get you a copy of the project up and running on
-your local machine for development and testing purposes. See deployment
-for notes on how to deploy the project on a live system.
+### Setting up Java
 
-### Prerequisites
+**Note:** `bfio` can be used without Java, but only the `python` backend will be
+useable. Only files in tiled OME Tiff format can be read/written.
 
-What things you need to install the software and how to install them
+In order to use the `Java` backend, it is necessary to first install the JDK.
+The `bfio` package is generally tested with
+[JDK 8](https://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html),
+but JDK 11 also appears to work.
 
-    Give examples
+Once the JDK is installed, additional dependencies can be installed using:
 
-### Installing
+`pip install python-javabridge==4.0.0 python-bioformats==4.0.0`
 
-A step by step series of examples that tell you how to get a development
-env running
+If there are issues installing `python-javabridge`, refer to the
+[documentation](https://pythonhosted.org/javabridge/)
 
-Say what the step will be
+### Installing bfio
 
-    Give the example
+The `bfio` package and the core dependencies (numpy, tifffile, imagecodecs) can
+be installed using pip:
 
-And repeat
+`pip install bfio`
 
-    until finished
+## Documentation
 
-End with an example of getting some data out of the system or using it
-for a little demo
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
-
-    Give an example
-
-### And coding style tests
-
-Explain what these tests test and why
-
-    Give an example
-
-## Deployment
-
-Add additional notes about how to deploy this on a live system
-
-## Build
-
-  - [Contributor Covenant](https://www.contributor-covenant.org/) - Used
-    for the Code of Conduct
-  - [Creative Commons](https://creativecommons.org/) - Used to choose
-    the license
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code
-of conduct, and the process for submitting pull requests to us.
+Documentation and examples are available on
+[Read the Docs](https://bfio.readthedocs.io/en/latest/).
 
 ## Versioning
 
@@ -87,16 +69,15 @@ repository](https://github.com/PurpleBooth/a-good-readme-template/tags).
 
 ## Authors
 
-
+Nick Schaub (nick.schaub@nih.gov, nick.schaub@labshare.org)
 
 ## License
 
-This project is licensed under the [CC0 1.0 Universal](LICENSE.md)
-Creative Commons License - see the [LICENSE.md](LICENSE.md) file for
+This project is licensed under the [MIT License](LICENSE)
+Creative Commons License - see the [LICENSE](LICENSE) file for
 details
 
 ## Acknowledgments
 
-  - Hat tip to anyone whose code was used
-  - Inspiration
-  - etc
+  - Parts of this code were written/modified from existing code found in
+    `python-bioformats` and `tifffile`.
