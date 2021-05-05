@@ -12,7 +12,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     Attributes:
         dtype: Gets/sets the pixel type (e.g. uint8)
         channel_names: Gets/sets the names of each channel
-        samples_per_pixel: Number of samples per pixel location
+        samples_per_pixel: Numbers of numbers per pixel location
         bytes_per_pixel: Number of bytes per pixel
         x: Get/set number of pixels in the x-dimension (width)
         y: Get/set number of pixels in the y-dimension (height)
@@ -38,26 +38,28 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     """
     # Set constants for reading/writing images
     _MAX_BYTES = 2 ** 30
-    _DTYPE = {"uint8": numpy.uint8,
-              "int8": numpy.int8,
-              "uint16": numpy.uint16,
-              "int16": numpy.int16,
-              "uint32": numpy.uint32,
-              "int32": numpy.int32,
-              "float": numpy.float32,
-              "double": numpy.float64}
-    _BPP = {"uint8": 1,
-            "int8": 1,
-            "uint16": 2,
-            "int16": 2,
-            "uint32": 4,
-            "int32": 4,
-            "float": 4,
-            "double": 8}
+    _DTYPE = {'uint8': numpy.uint8,
+              'int8': numpy.int8,
+              'uint16': numpy.uint16,
+              'int16': numpy.int16,
+              'uint32': numpy.uint32,
+              'int32': numpy.int32,
+              'float': numpy.float32,
+              'double': numpy.float64}
+    _BPP = {'uint8': 1,
+            'int8': 1,
+            'uint16': 2,
+            'int16': 2,
+            'uint32': 4,
+            'int32': 4,
+            'float': 4,
+            'double': 8}
     _TILE_SIZE = 2 ** 10
     _CHUNK_SIZE = None
     
-    _READ_ONLY_MESSAGE = "{} is read-only."
+    _DIMS = {}
+    
+    _READ_ONLY_MESSAGE = '{} is read-only.'
     
     # protected backend object for interfacing with the file on disk
     _backend = None
@@ -78,16 +80,16 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __init__(self,
                  file_path: typing.Union[str,Path],
                  max_workers: typing.Optional[int] = None,
-                 backend: typing.Optional[str] ="python",
+                 backend: typing.Optional[str] = None,
                  read_only: typing.Optional[bool] = True):
         """__init__ Initialize BioBase object
 
          Args:
-            file_path (str): Path to output file
-            max_workers (int,optional): Number of threads to be used.
+            file_path: Path to output file
+            max_workers: Number of threads to be used.
                 Default is None.
-            backend (str,optional): Backend to use, must be "python" or "java".
-                Default is "python".
+            backend: Backend to use, must be 'python' or 'java'.
+                Default is 'python'.
         """
         
         # Whether the object is read only
@@ -97,30 +99,40 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         if isinstance(file_path,str):
             file_path = Path(file_path)
         self._file_path = file_path
-
-        # Set the number of workers for multi-threaded loading
-        self.max_workers = max_workers if max_workers != None else max([multiprocessing.cpu_count()//2,1])
         
-        # Throw an error if an invalid backend is specified
-        if backend.lower() not in ["python","java"]:
-            raise ValueError("Keyword argument backend must be one of ['python','java']")
-        
-        # Set the backend
+        # validate/set the backend
+        if backend == None:
+            extension = ''.join(self._file_path.suffixes)
+            if extension == '.ome.tif':
+                backend = 'python'
+            elif extension == '.ome.zarr':
+                backend = 'zarr'
+            else:
+                backend = 'java'
+        elif backend.lower() not in ['python','java', 'zarr']:
+            raise ValueError('Keyword argument backend must be one of ["python","java","zarr"]')
         self._backend_name = backend.lower()
+        
+        # Set the number of workers for multi-threaded loading
+        if self._backend_name=='java' and max_workers != None:
+            self.logger.warning('The max_workers keyword was present, but the java backend only operates with a single worker. Setting max_workers=1.')
+            self.max_workers = 1
+        else:
+            self.max_workers = max_workers if max_workers != None else max([multiprocessing.cpu_count()//2,1])
         
         # Create an thread lock for the object
         self._lock =  threading.Lock()
     
     def __setitem__(self,keys: typing.Union[list,tuple],values: numpy.ndarray):
-        raise NotImplementedError("Cannot set values for {} class.".format(self.__class__.__name__))
+        raise NotImplementedError('Cannot set values for {} class.'.format(self.__class__.__name__))
     
     def __getitem__(self,keys):
-        raise NotImplementedError("Cannot get values for {} class.".format(self.__class__.__name__))
+        raise NotImplementedError('Cannot get values for {} class.'.format(self.__class__.__name__))
     
     def _parse_slice(self,keys):
         
         # Dimension ordering and index initialization
-        dims = "YXZCT"
+        dims = 'YXZCT'
         ind = {d:None for d in dims}
         
         # If an empty slice, load the whole image
@@ -128,23 +140,23 @@ class BioBase(object,metaclass=abc.ABCMeta) :
             if isinstance(keys,slice) and keys.start == None and keys.stop == None and keys.step==None:
                 pass
             else:
-                raise ValueError("If only a single index is supplied, it must be an empty slice ([:]).")
+                raise ValueError('If only a single index is supplied, it must be an empty slice ([:]).')
             
         # If not an empty slice, parse the key tuple
         else:
             
             # At most, 5 indices can be indicated
             if len(keys) > 5:
-                raise ValueError("Found {} indices, but at most 5 indices may be supplied.".format(len(keys)))
+                raise ValueError('Found {} indices, but at most 5 indices may be supplied.'.format(len(keys)))
             
             # If the first key is an ellipsis, read backwards
             if keys[0] == Ellipsis:
                 
                 # If the last key is an ellipsis, throw an error
                 if keys[-1]==Ellipsis:
-                    raise ValueError("Ellipsis (...) may be used in either the first or last index, not both.")
+                    raise ValueError('Ellipsis (...) may be used in either the first or last index, not both.')
                 
-                dims = "".join([d for d in reversed(dims)])
+                dims = ''.join([d for d in reversed(dims)])
                 keys = [k for k in reversed(keys)]
             
             # Get key values
@@ -155,8 +167,8 @@ class BioBase(object,metaclass=abc.ABCMeta) :
                     stop = getattr(self,dim) if key.stop == None else key.stop
                     
                     # For CT dimensions, generate a list from slices
-                    if dim in "CT":
-                        step = 1 if key.step == None else key.step
+                    if dim in 'CT':
+                        step = 1 if key.step is None else key.step
                         ind[dim] = list(range(start,stop,step))
                     
                     # For XYZ dimensions, get start and stop of slice, ignore step
@@ -164,19 +176,21 @@ class BioBase(object,metaclass=abc.ABCMeta) :
                         ind[dim] = [start,stop]
                         
                 elif isinstance(key,(int,tuple,list)):
-                    # Only the last two dimensions can use int, tuple, or list indexing
-                    if dim in "CT":
+                    # Only the last three dimensions can use int, tuple, or list indexing
+                    if dim in 'ZCT':
                         if isinstance(key,int):
                             ind[dim] = [key]
+                            if dim == 'Z':
+                                ind[dim].append(ind[dim][0]+1)
                         else:
                             ind[dim] = key
                     else:
-                        raise ValueError("The index in position {} must be a slice type.".format(dims.find(dim)))
+                        raise ValueError('The index in position {} must be a slice type.'.format(dims.find(dim)))
                 elif key==Ellipsis:
                     if dims.find(dim)+1 < len(keys):
-                        raise ValueError("Ellipsis may only be used in the first or last index.")
+                        raise ValueError('Ellipsis may only be used in the first or last index.')
                 else:
-                    raise ValueError("Did not recognize indexing value of type: {}".format(type(key)))
+                    raise ValueError('Did not recognize indexing value of type: {}'.format(type(key)))
                 
         return ind
                 
@@ -187,23 +201,18 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @read_only.setter
     def read_only(self):
-        raise AttributeError(self._READ_ONLY_MESSAGE.format("read_only"))
+        raise AttributeError(self._READ_ONLY_MESSAGE.format('read_only'))
     
     def __getattribute__(self,name):
         # Get image dimensions using num_x, x, or X
-        if (name.startswith("num_") and name[-1] in "xyzct"):
-            raise PendingDeprecationWarning(("num_{0} will be deprecated in bfio version 2.1.0.\n" + \
-                                             "Currently, num_{0} can only be used to get the dimension." + \
-                                             "\tTo get/set the image dimension, " + \
-                                             "use the new get/set attribute BioReader.{0}").format(name[-1]))
-        if (len(name)==1 and name.lower() in "xyzct"):
-            return getattr(self._metadata.image().Pixels,"get_Size{}".format(name.upper()))()
+        if (len(name)==1 and name.lower() in 'xyzct'):
+            return getattr(self._metadata.image().Pixels,'get_Size{}'.format(name.upper()))()
         else:
             return object.__getattribute__(self,name)
         
     def __setattr__(self,name,args):
         # Set image dimensions, for example, using x or X
-        if len(name)==1 and name.lower() in "xyzct":
+        if len(name)==1 and name.lower() in 'xyzct':
             self.__xyzct_setter(name,args)
         else:
             object.__setattr__(self,name,args)
@@ -211,8 +220,9 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __xyzct_setter(self,dimension,value):
         assert not self.__read_only, self._READ_ONLY_MESSAGE.format(dimension.lower())
         assert value >= 1, "{} must be >= 0".format(dimension.upper())
-        setattr(self._metadata.image(0).Pixels,"Size{}".format(dimension.upper()),value)
-        if dimension.upper() == "C":
+        setattr(self._metadata.image(0).Pixels,'Size{}'.format(dimension.upper()),value)
+        self._DIMS[dimension.upper()] = value
+        if dimension.upper() == 'C':
             self._metadata.image(0).Pixels.channel_count = value
         self._metadata.image().Pixels.tiffdata_count = self.Z * self.C * self.T
         
@@ -241,7 +251,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         assert not self.__read_only, self._READ_ONLY_MESSAGE.format("channel_names")
         assert len(cnames) == self.C, "Number of names does not match number of channels."
         for i in range(0, len(cnames)):
-            self._metadata.image(0).Pixels.Channel(i).Name = cnames[i]
+            self._metadata.image(0).Pixels.Channel(i).Name = '' if cnames[i] == None else cnames[i]
 
     @property
     def shape(self) -> typing.Tuple[int,int,int,int,int]:
@@ -251,12 +261,12 @@ class BioBase(object,metaclass=abc.ABCMeta) :
             (:attr:`~.Y`, :attr:`~.X`, :attr:`~.Z`, :attr:`~.C`, :attr:`~.T`)
             shape of the image
         """
-        return tuple(getattr(self,d) for d in "yxzct")
+        return tuple(getattr(self,d) for d in 'yxzct')
         
     @shape.setter
     def shape(self,new_shape: typing.Tuple[int,int,int,int,int]):
         assert len(new_shape) == 5
-        for s,d in zip(new_shape,"yxzct"):
+        for s,d in zip(new_shape,'yxzct'):
             setattr(self,d,s)
 
     @property
@@ -272,8 +282,8 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __physical_size(self,dimension,psize,units):
         if psize != None and units != None:
             assert not self.__read_only, self._READ_ONLY_MESSAGE.format("physical_size_{}".format(dimension.lower()))
-            setattr(self._metadata.image(0).Pixels,"PhysicalSize{}".format(dimension.upper()),psize)
-            setattr(self._metadata.image(0).Pixels,"PhysicalSize{}Unit".format(dimension.upper()),units)
+            setattr(self._metadata.image(0).Pixels,'PhysicalSize{}'.format(dimension.upper()),psize)
+            setattr(self._metadata.image(0).Pixels,'PhysicalSize{}Unit'.format(dimension.upper()),units)
 
     @property
     def physical_size_x(self) -> typing.Tuple[float,str]:
@@ -286,7 +296,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @physical_size_x.setter
     def physical_size_x(self,size_units: tuple):
-        self.__physical_size("X",*size_units)
+        self.__physical_size('X',*size_units)
         
     @property
     def ps_x(self) -> typing.Tuple[float,str]:
@@ -295,7 +305,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @ps_x.setter
     def ps_x(self,size_units: tuple):
-        self.__physical_size("X",*size_units)
+        self.__physical_size('X',*size_units)
         
     @property
     def physical_size_y(self) -> typing.Tuple[float,str]:
@@ -308,7 +318,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @physical_size_y.setter
     def physical_size_y(self,size_units: tuple):
-        self.__physical_size("Y",*size_units)
+        self.__physical_size('Y',*size_units)
         
     @property
     def ps_y(self):
@@ -317,7 +327,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @ps_y.setter
     def ps_y(self,size_units: tuple):
-        self.__physical_size("Y",*size_units)
+        self.__physical_size('Y',*size_units)
         
     @property
     def physical_size_z(self) -> typing.Tuple[float,str]:
@@ -330,7 +340,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @physical_size_z.setter
     def physical_size_z(self,size_units: tuple):
-        self.__physical_size("Z",*size_units)
+        self.__physical_size('Z',*size_units)
         
     @property
     def ps_z(self):
@@ -339,34 +349,36 @@ class BioBase(object,metaclass=abc.ABCMeta) :
 
     @ps_z.setter
     def ps_z(self,size_units: tuple):
-        self.__physical_size("Z",*size_units)
+        self.__physical_size('Z',*size_units)
 
     """ -------------------- """
     """ -Validation methods- """
     """ -------------------- """
     
-    def _val_xyz(self, xyz: int, axis: str) -> typing.List[int]:
+    def _val_xyz(self, xyz: typing.Union[int,list,tuple], axis: str) -> typing.List[int]:
         """_val_xyz Utility function for validating image dimensions
 
         Args:
             xyz: Pixel value of x, y, or z dimension.
                 If None, returns the maximum range of the dimension
-            axis: Must be "X", "Y", or "Z"
+            axis: Must be 'x', 'y', or 'z'
 
         Returns:
             list of ints indicating the first and last index in the dimension
         """
-        assert axis in "XYZ"
+        assert axis in 'XYZ'
         
         if xyz == None:
-            xyz = [0,getattr(self,axis)]
+            xyz = [0,self._DIMS[axis]]
         else:
+            if axis=='Z' and isinstance(xyz,int):
+                xyz = [xyz,xyz+1]
             assert len(xyz) == 2, \
-                "{} must be a list or tuple of length 2.".format(axis)
+                '{} must be a list or tuple of length 2.'.format(axis)
             assert xyz[0] >= 0, \
-                "{}[0] must be greater than or equal to 0.".format(axis)
-            assert xyz[1] <= getattr(self,axis), \
-                "{}[1] cannot be greater than the maximum of the dimension ({}).".format(axis, getattr(self,axis))
+                '{}[0] must be greater than or equal to 0.'.format(axis)
+            assert xyz[1] <= self._DIMS[axis], \
+                '{}[1] cannot be greater than the maximum of the dimension ({}).'.format(axis,self._DIMS[axis])
                 
         return xyz
 
@@ -376,24 +388,24 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         Args:
             ct: List of ints indicating the channels or timepoints to load
                 If None, returns a list of ints
-            axis: Must be "C", "T"
+            axis: Must be 'c', 't'
 
         Returns:
             list of ints indicating the first and last index in the dimension
         """
 
-        assert axis in "CT"
+        assert axis in 'CT'
         
         if ct == None:
             # number of timepoints
-            ct = list(range(0, getattr(self,axis)))
+            ct = list(range(0, self._DIMS[axis]))
         else:
-            assert numpy.any(numpy.greater(getattr(self,axis), ct)), \
-            "At least one of the {}-indices was larger than largest index ({}).".format(axis, getattr(self,axis) - 1)
+            assert numpy.any(numpy.greater(self._DIMS[axis], ct)), \
+            'At least one of the {}-indices was larger than largest index ({}).'.format(axis, self._DIMS[axis] - 1)
             assert numpy.any(numpy.less_equal(0, ct)), \
-            "At least one of the {}-indices was less than 0.".format(axis)
+            'At least one of the {}-indices was less than 0.'.format(axis)
             assert len(ct) != 0, \
-            "At least one {}-index must be selected.".format(axis)
+            'At least one {}-index must be selected.'.format(axis)
             
         return ct
 
@@ -445,7 +457,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     @bytes_per_pixel.setter
     def bytes_per_pixel(self,
                         bytes_per_pixel: int):
-        raise AttributeError("Bytes per pixel cannot be set. Change the dtype instead")
+        raise AttributeError('Bytes per pixel cannot be set. Change the dtype instead')
     
     @property
     def bpp(self):
@@ -488,10 +500,10 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     
     @metadata.setter
     def metadata(self,value):
-        raise AttributeError("The metadata attribute is read-only. Components" +
-                             " of the metadata can be modified by getting" +
-                             " the metadata object and making changes, or by" +
-                             " changing the attriutes of the image.")
+        raise AttributeError('The metadata attribute is read-only. Components' +
+                             ' of the metadata can be modified by getting' +
+                             ' the metadata object and making changes, or by' +
+                             ' changing the attriutes of the image.')
 
     def maximum_batch_size(self,
                            tile_size: typing.List[int],
@@ -536,10 +548,10 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         This code is called when a `with` statement is used. This allows a
         BioBase object to be used like this:
         
-        with bfio.BioReader("Path/To/File.ome.tif") as reader:
+        with bfio.BioReader('Path/To/File.ome.tif') as reader:
             ...
             
-        with bfio.BioWriter("Path/To/File.ome.tif") as writer:
+        with bfio.BioWriter('Path/To/File.ome.tif') as writer:
             ...
         """
         return self
@@ -590,7 +602,7 @@ class AbstractBackend(object,metaclass=abc.ABCMeta):
                                                        (c,C[c]),
                                                        (t,T[t])))
         
-        self.logger.debug("_image_io(): _tile_indices = {}".format(self._tile_indices))
+        self.logger.debug('_image_io(): _tile_indices = {}'.format(self._tile_indices))
         
     @abc.abstractmethod
     def close(self):
