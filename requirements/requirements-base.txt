@@ -1,5 +1,4 @@
-
-numpy==1.19.1
-imagecodecs==2020.5.30
-tifffile==2020.7.4
-bfio==2.0.6
+numpy==1.20.1
+imagecodecs==2021.2.26
+tifffile==2020.11.18
+bfio==2.1.0

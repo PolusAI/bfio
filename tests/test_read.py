@@ -1,5 +1,5 @@
 import unittest
-import requests, io, pathlib, shutil, logging
+import requests, io, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 
@@ -12,12 +12,20 @@ TEST_IMAGES = {
     
 TEST_DIR = pathlib.Path(__file__).with_name('data')
 
+logging.basicConfig(format='%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s',
+                    datefmt='%d-%b-%y %H:%M:%S')
+logger = logging.getLogger("bfio.test")
+
+if '-v' in sys.argv:
+    logger.setLevel(logging.INFO)
+
 def setUpModule():
+    
     """ Download images for testing """
     TEST_DIR.mkdir(exist_ok=True)
     
     for file,url in TEST_IMAGES.items():
-        print(f'setup - Downloading: {file}')
+        logger.info(f'setup - Downloading: {file}')
         
         if not file.endswith('.ome.zarr'):
             r = requests.get(url)
@@ -49,7 +57,7 @@ def setUpModule():
 def tearDownModule():
     """ Remove test images """
     
-    print('teardown - Removing test images...')
+    logger.info('teardown - Removing test images...')
     shutil.rmtree(TEST_DIR)
 
 class TestSimpleRead(unittest.TestCase):
@@ -106,7 +114,7 @@ class TestSimpleRead(unittest.TestCase):
             
             I = br[:]
             
-            print(I.shape)
+            logger.info(I.shape)
             
     @unittest.expectedFailure
     def test_read_ome_tif_strip_auto(self):
@@ -134,46 +142,46 @@ class TestSimpleRead(unittest.TestCase):
 def get_dims(reader):
     """ Get all dimension attributes """
     for dim in 'xyzct':
-        print('image.{} = {}'.format(dim,getattr(reader,dim)))
+        logger.info('image.{} = {}'.format(dim,getattr(reader,dim)))
     for dim in 'xyzct'.upper():
-        print('image.{} = {}'.format(dim,getattr(reader,dim)))
-    print('image.shape = {}'.format(reader.shape))
+        logger.info('image.{} = {}'.format(dim,getattr(reader,dim)))
+    logger.info('image.shape = {}'.format(reader.shape))
     
 def get_pixel_size(reader):
     """ Get all pixel size attributes """
     for dim in 'xyz':
         attribute = 'physical_size_{}'.format(dim)
-        print('image.physical_size_{} = {}'.format(dim,
+        logger.info('image.physical_size_{} = {}'.format(dim,
                                                    getattr(reader,attribute)))
     for dim in 'xyz':
         attribute = 'ps_{}'.format(dim)
-        print('image.ps_{} = {}'.format(dim,
+        logger.info('image.ps_{} = {}'.format(dim,
                                         getattr(reader,attribute)))
         
 def get_pixel_info(reader):
     """ Get pixel information (type, samples per pixel, etc) """
-    print('image.samples_per_pixel={}'.format(reader.samples_per_pixel))
-    print('image.spp={}'.format(reader.spp))
-    print('image.bytes_per_pixel={}'.format(reader.bytes_per_pixel))
-    print('image.bpp={}'.format(reader.bpp))
-    print('image.dtype={}'.format(reader.dtype))
+    logger.info('image.samples_per_pixel={}'.format(reader.samples_per_pixel))
+    logger.info('image.spp={}'.format(reader.spp))
+    logger.info('image.bytes_per_pixel={}'.format(reader.bytes_per_pixel))
+    logger.info('image.bpp={}'.format(reader.bpp))
+    logger.info('image.dtype={}'.format(reader.dtype))
     
 def get_channel_names(reader):
     """ Get channel names attribute """
-    print('image.channel_names={}'.format(reader.channel_names))
-    print('image.cnames={}'.format(reader.cnames))
+    logger.info('image.channel_names={}'.format(reader.channel_names))
+    logger.info('image.cnames={}'.format(reader.cnames))
 
 """ Test classes (where the testing actually happens) """
 class TestVersion(unittest.TestCase):
     
     def test_bfio_version(self):
         """ Ensure bfio version is properly loaded """
-        print('__version__ = {}'.format(bfio.__version__))
+        logger.info('__version__ = {}'.format(bfio.__version__))
         assert bfio.__version__ != '0.0.0'
         
     def test_jar_version(self):
         """ Load loci-tools.jar and get version """
-        print('JAR_VERSION = {}'.format(bfio.JAR_VERSION))
+        logger.info('JAR_VERSION = {}'.format(bfio.JAR_VERSION))
         assert bfio.__version__ != None
         
 class TestJavaReader(unittest.TestCase):

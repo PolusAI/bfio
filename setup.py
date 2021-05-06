@@ -31,7 +31,19 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires = ['tifffile==2020.11.18',
+    install_requires = ['tifffile<=2020.11.18',
                         'imagecodecs>=2021.2.26',
                         'numpy>=1.20.1'],
+    extras_require = {
+        'jpype': [
+            'jpype1>=1.2.1'
+        ],
+        'zarr': [
+            'zarr>=2.6.1'
+        ],
+        'all': [
+            'jpype1>=1.2.1',
+            'zarr>=2.6.1'
+        ]
+    }
 )
