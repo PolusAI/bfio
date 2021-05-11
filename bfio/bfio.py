@@ -101,7 +101,7 @@ class BioReader(BioBase):
             
             if max_workers == 2:
                 self.max_workers = 1
-                self.logger.warning("Setting max_workers to 1, since max_workers==2 runs slower. To change back, set the object property.")
+                self.logger.debug("Setting max_workers to 1, since max_workers==2 runs slower. To change back, set the object property.")
         else:
             raise ValueError('backend must be "python", "java", or "zarr"')
 
@@ -719,6 +719,16 @@ class BioWriter(BioBase):
                                         backend=backend,
                                         read_only=False)
 
+        # Ensure backend is supported
+        if self._backend_name == 'python':
+            self._backend = backends.PythonWriter(self)
+        elif self._backend_name == 'java':
+            self._backend = backends.JavaWriter(self)
+        elif self._backend_name == 'zarr':
+            self._backend = backends.ZarrWriter(self)
+        else:
+            raise ValueError('backend must be "python", "java", or "zarr"')
+
         if metadata:
             assert metadata.__class__.__name__ == "OMEXML"
             self._metadata = OmeXml.OMEXML(str(metadata))
@@ -747,16 +757,6 @@ class BioWriter(BioBase):
                                 'files, but the metadata has {} images. '.format(self.metadata.image_count) +
                                 'Setting the number of images to 1.')
             self.metadata.image_count = 1
-
-        # Ensure backend is supported
-        if self._backend_name == 'python':
-            self._backend = backends.PythonWriter(self)
-        elif self._backend_name == 'java':
-            self._backend = backends.JavaWriter(self)
-        elif self._backend_name == 'zarr':
-            self._backend = backends.ZarrWriter(self)
-        else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
 
         # Get dims to speed up validation checks
         self._DIMS = {

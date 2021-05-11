@@ -813,7 +813,7 @@ try:
 
         def read_metadata(self):
             self.logger.debug('read_metadata(): Reading metadata...')
-            if 'metadata' in self._root.keys():
+            if 'metadata' in self._root.attrs.keys():
                 return OMEXML(self._root.attrs['metadata'])
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file

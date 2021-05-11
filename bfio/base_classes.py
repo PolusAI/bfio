@@ -103,9 +103,9 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         # validate/set the backend
         if backend == None:
             extension = ''.join(self._file_path.suffixes)
-            if extension == '.ome.tif':
+            if extension.endswith('.ome.tif'):
                 backend = 'python'
-            elif extension == '.ome.zarr':
+            elif extension.endswith('.ome.zarr'):
                 backend = 'zarr'
             else:
                 backend = 'java'

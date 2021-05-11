@@ -19,46 +19,46 @@ logger = logging.getLogger("bfio.test")
 if '-v' in sys.argv:
     logger.setLevel(logging.INFO)
 
-def setUpModule():
+# def setUpModule():
     
-    """ Download images for testing """
-    TEST_DIR.mkdir(exist_ok=True)
+#     """ Download images for testing """
+#     TEST_DIR.mkdir(exist_ok=True)
     
-    for file,url in TEST_IMAGES.items():
-        logger.info(f'setup - Downloading: {file}')
+#     for file,url in TEST_IMAGES.items():
+#         logger.info(f'setup - Downloading: {file}')
         
-        if not file.endswith('.ome.zarr'):
-            r = requests.get(url)
+#         if not file.endswith('.ome.zarr'):
+#             r = requests.get(url)
             
-            with open(TEST_DIR.joinpath(file),'wb') as fw:
+#             with open(TEST_DIR.joinpath(file),'wb') as fw:
                 
-                fw.write(r.content)
-        else:
+#                 fw.write(r.content)
+#         else:
             
-            base_path = TEST_DIR.joinpath(file)
-            base_path.mkdir()
-            base_path.joinpath('0').mkdir()
+#             base_path = TEST_DIR.joinpath(file)
+#             base_path.mkdir()
+#             base_path.joinpath('0').mkdir()
             
-            units = [
-                '.zattrs',
-                '.zgroup',
-                '0/.zarray',
-                '0/0.0.0.0.0',
-                '0/0.1.0.0.0',
-                '0/0.2.0.0.0',
-            ]
+#             units = [
+#                 '.zattrs',
+#                 '.zgroup',
+#                 '0/.zarray',
+#                 '0/0.0.0.0.0',
+#                 '0/0.1.0.0.0',
+#                 '0/0.2.0.0.0',
+#             ]
             
-            for u in units:
+#             for u in units:
                 
-                with open(base_path.joinpath(u),'wb') as fw:
+#                 with open(base_path.joinpath(u),'wb') as fw:
                     
-                    fw.write(requests.get(url+u).content)
+#                     fw.write(requests.get(url+u).content)
             
-def tearDownModule():
-    """ Remove test images """
+# def tearDownModule():
+#     """ Remove test images """
     
-    logger.info('teardown - Removing test images...')
-    shutil.rmtree(TEST_DIR)
+#     logger.info('teardown - Removing test images...')
+#     shutil.rmtree(TEST_DIR)
 
 class TestSimpleRead(unittest.TestCase):
     
@@ -227,3 +227,22 @@ class TestZarrReader(unittest.TestCase):
         """ Testing metadata channel names """
         with bfio.BioReader(TEST_DIR.joinpath('1884807.ome.zarr')) as br:
             get_channel_names(br)
+            
+class TestZarrMetadata(unittest.TestCase):
+    
+    def test_set_metadata(self):
+        """ Testing metadata dimension attributes """
+        cname = ['test']
+        
+        image = np.load(TEST_DIR.joinpath('4d_array.npy'))
+        
+        with bfio.BioWriter(TEST_DIR.joinpath('test_cname.ome.zarr')) as bw:
+            bw.cnames = cname
+            bw.ps_x = (100,'nm')
+            bw.shape = image.shape
+            bw[:] = image
+        
+        with bfio.BioReader(TEST_DIR.joinpath('test_cname.ome.zarr')) as br:
+            logger.info(br.cnames)
+            logger.info(br.ps_x)
+            self.assertEqual(br.cnames[0],cname[0])
