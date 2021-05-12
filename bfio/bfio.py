@@ -4,6 +4,7 @@ from pathlib import Path
 from bfio import backends, OmeXml, JARS, JAR_VERSION, LOG4J
 from bfio.base_classes import BioBase
 import numpy as np
+import json
 
 try:
     import jpype
@@ -581,16 +582,16 @@ class BioReader(BioBase):
         yield images, index
 
     @classmethod
-    def image_size(cls,filepath):
+    def image_size(cls,filepath: Path):
         """image_size Read image width and height from header
         
-        This class method only reads the header information of tiff files to
-        identify the image width and height. There are instances when the image
-        dimensions may want to be known without actually loading the image, and
-        reading only the header is considerably faster than loading bioformats
-        just to read simple metadata information.
+        This class method only reads the header information of tiff files or the
+        zarr array json to identify the image width and height. There are
+        instances when the image dimensions may want to be known without
+        actually loading the image, and reading only the header is considerably
+        faster than loading bioformats just to read simple metadata information.
 
-        If the file is not a TIFF, returns width = height = -1.
+        If the file is not a TIFF or OME Zarr, returns width = height = -1.
 
         This code was adapted to only operate on tiff images and includes
         additional to read the header of little endian encoded BigTIFF files.
@@ -598,11 +599,24 @@ class BioReader(BioBase):
         https://github.com/shibukawa/imagesize_py
         
         Args:
-            filepath (str): Path to tiff file
+            filepath (pathlib.Path): Path to tiff file
         Returns:
             (width, height): Tuple of ints indicating width and height.
 
         """
+        
+        # Support strings input
+        if isinstance(filepath,str):
+            filepath = Path(filepath)
+        
+        # Handle a zarr file
+        if filepath.name.endswith('ome.zarr'):
+            with open(filepath.joinpath('0').joinpath('.zarray'),'r') as fr:
+                zarray = json.load(fr)
+                height = zarray['shape'][3]
+                width = zarray['shape'][4]
+            return width, height
+        
         height = -1
         width = -1
 

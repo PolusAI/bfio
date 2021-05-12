@@ -935,7 +935,7 @@ try:
             y0e = min([Y[0]+self.frontend._TILE_SIZE,out.shape[0]])
             x1e = min([X[1]+self.frontend._TILE_SIZE,self.frontend._DIMS["X"]])
             x0e = min([X[0]+self.frontend._TILE_SIZE,out.shape[1]])
-            self._writer[T[1]:T[1]+1,C[1]:C[1]+1,Z[1]:Z[1]+1,Y[1]:y1e,X[0]:x1e] = \
+            self._writer[T[1]:T[1]+1,C[1]:C[1]+1,Z[1]:Z[1]+1,Y[1]:y1e,X[1]:x1e] = \
                 out[Y[0]:y0e,X[0]:x0e,Z[0]:Z[0]+1,C[0]:C[0]+1,T[0]:T[0]+1].transpose(4,3,2,0,1)
 
         def _write_image(self,X,Y,Z,C,T,image):
