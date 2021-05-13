@@ -1,4 +1,4 @@
-# **B**io**F**ormats **I**nput/**O**utput utility (bfio)
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio v2.1.3)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
@@ -34,20 +34,14 @@ Docker containers with all necessary components are available (see
 
 ### Setting up Java
 
-**Note:** `bfio` can be used without Java, but only the `python` backend will be
-useable. Only files in tiled OME Tiff format can be read/written.
+**Note:** `bfio` can be used without Java, but only the `python` and `zarr`
+backends will be useable. Only files in tiled OME Tiff or OME Zarr format can be
+read/written.
 
 In order to use the `Java` backend, it is necessary to first install the JDK.
 The `bfio` package is generally tested with
 [JDK 8](https://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html),
-but JDK 11 also appears to work.
-
-Once the JDK is installed, additional dependencies can be installed using:
-
-`pip install python-javabridge==4.0.0 python-bioformats==4.0.0`
-
-If there are issues installing `python-javabridge`, refer to the
-[documentation](https://pythonhosted.org/javabridge/)
+but JDK 11 and later also appear to work.
 
 ### Installing bfio
 
@@ -55,6 +49,12 @@ The `bfio` package and the core dependencies (numpy, tifffile, imagecodecs) can
 be installed using pip:
 
 `pip install bfio`
+
+Additionally, `bfio` with other dependencies can be installed:
+
+1. `pip install bfio[jpype]` - Adds support for BioFormats/Java
+2. `pip install bfio[zarr]` - Adds support for OME Zarr
+3. `pip install bfio[all]` - Installs all dependencies.
 
 ## Documentation
 

@@ -627,10 +627,18 @@ try:
 
             out = self._image
 
-            for c in C:
-                for t in T:
-                    for z in range(Z[0],Z[1]):
-                        index = self._rdr.getIndex(z, c, t);
+            for ti,t in enumerate(T):
+                for zi,z in enumerate(range(Z[0],Z[1])):
+                    for ci,c in enumerate(C):
+                        
+                        # TODO: This should be changed in the future
+                        # See the comment below about properly handling
+                        # interleaved channel data.
+                        if self.frontend.spp > 1:
+                            index = self._rdr.getIndex(z, 0, t)
+                        else:
+                            index = self._rdr.getIndex(z, c, t)
+                            
                         x_max = min([X[1],self.frontend.X])
                         for x in range(X[0],x_max,self._chunk_size):
                             x_range = min([self._chunk_size,x_max-x])
@@ -641,12 +649,23 @@ try:
 
                                 image = self._rdr.openBytes(index, x, y, x_range, y_range)
                                 image = numpy.frombuffer(bytes(image),self.frontend.dtype)
-
+                                
+                                # TODO: This should be changed in the future
+                                # This reloads all channels for a tile on each
+                                # loop. Ideally, there would be some better
+                                # logic here to only load the necessary channel
+                                # information once.
+                                if self.frontend.spp > 1:
+                                    image = image.reshape(self.frontend.c,y_range,x_range)
+                                    image = image[c,...].squeeze()
+                                    print(image.shape)
+                                    
+                                print(z)
                                 out[y: y+y_range,
                                     x: x+x_range,
-                                    z,
-                                    c,
-                                    t] = image.reshape(y_range,x_range)
+                                    zi,
+                                    ci,
+                                    ti] = image.reshape(y_range,x_range)
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr != None:

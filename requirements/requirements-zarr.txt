@@ -1,2 +1,0 @@
-numcodecs==0.7.3
-zarr==2.6.1
