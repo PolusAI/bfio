@@ -1,4 +1,4 @@
-# **B**io**F**ormats **I**nput/**O**utput utility (bfio v2.1.3)
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio v2.1.4)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
