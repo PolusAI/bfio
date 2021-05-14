@@ -93,7 +93,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         """
         
         # Whether the object is read only
-        self.__read_only = read_only
+        self._read_only = read_only
         
         # Internally, keep the file_path as a Path object
         if isinstance(file_path,str):
@@ -197,7 +197,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     @property
     def read_only(self) -> bool:
         """Returns true if object is ready only"""
-        return self.__read_only
+        return self._read_only
 
     @read_only.setter
     def read_only(self):
@@ -218,7 +218,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
             object.__setattr__(self,name,args)
     
     def __xyzct_setter(self,dimension,value):
-        assert not self.__read_only, self._READ_ONLY_MESSAGE.format(dimension.lower())
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format(dimension.lower())
         assert value >= 1, "{} must be >= 0".format(dimension.upper())
         setattr(self._metadata.image(0).Pixels,'Size{}'.format(dimension.upper()),value)
         self._DIMS[dimension.upper()] = value
@@ -248,7 +248,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         
     @channel_names.setter
     def channel_names(self,cnames: typing.List[str]):
-        assert not self.__read_only, self._READ_ONLY_MESSAGE.format("channel_names")
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format("channel_names")
         assert len(cnames) == self.C, "Number of names does not match number of channels."
         for i in range(0, len(cnames)):
             self._metadata.image(0).Pixels.Channel(i).Name = '' if cnames[i] == None else cnames[i]
@@ -276,12 +276,12 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         
     @cnames.setter
     def cnames(self,cnames: typing.List[str]):
-        assert not self.__read_only, self._READ_ONLY_MESSAGE.format("cnames")
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format("cnames")
         self.channel_names = cnames
             
     def __physical_size(self,dimension,psize,units):
         if psize != None and units != None:
-            assert not self.__read_only, self._READ_ONLY_MESSAGE.format("physical_size_{}".format(dimension.lower()))
+            assert not self._read_only, self._READ_ONLY_MESSAGE.format("physical_size_{}".format(dimension.lower()))
             setattr(self._metadata.image(0).Pixels,'PhysicalSize{}'.format(dimension.upper()),psize)
             setattr(self._metadata.image(0).Pixels,'PhysicalSize{}Unit'.format(dimension.upper()),units)
 
@@ -420,7 +420,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     
     @dtype.setter
     def dtype(self,dtype):
-        assert not self.__read_only, self._READ_ONLY_MESSAGE.format("dtype")
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format("dtype")
         if dtype in [numpy.uint64, numpy.int64]:
             self.logger.warning(f"{dtype} is not supported by Bioformats, saving as numpy.float64.")
             dtype = numpy.float64

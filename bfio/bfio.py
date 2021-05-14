@@ -733,16 +733,6 @@ class BioWriter(BioBase):
                                         backend=backend,
                                         read_only=False)
 
-        # Ensure backend is supported
-        if self._backend_name == 'python':
-            self._backend = backends.PythonWriter(self)
-        elif self._backend_name == 'java':
-            self._backend = backends.JavaWriter(self)
-        elif self._backend_name == 'zarr':
-            self._backend = backends.ZarrWriter(self)
-        else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
-
         if metadata:
             assert metadata.__class__.__name__ == "OMEXML"
             self._metadata = OmeXml.OMEXML(str(metadata))
@@ -762,6 +752,16 @@ class BioWriter(BioBase):
             elif kwargs:
                 for k,v in kwargs.items():
                     setattr(self,k,v)
+                    
+        # Ensure backend is supported
+        if self._backend_name == 'python':
+            self._backend = backends.PythonWriter(self)
+        elif self._backend_name == 'java':
+            self._backend = backends.JavaWriter(self)
+        elif self._backend_name == 'zarr':
+            self._backend = backends.ZarrWriter(self)
+        else:
+            raise ValueError('backend must be "python", "java", or "zarr"')
 
         if not self._file_path.name.endswith('.ome.tif') and not self._file_path.name.endswith('.ome.tif'):
             ValueError("The file extension must be .ome.tif or .ome.zarr")
@@ -855,7 +855,7 @@ class BioWriter(BioBase):
         Returns:
             OMEXML object
         """
-        assert not self._backend._writer, "The image has started to be written. To modify the xml again, reinitialize."
+        assert not self._read_only, "The image has started to be written. To modify the xml again, reinitialize."
         omexml = OmeXml.OMEXML()
         omexml.image(0).Name = Path(self._file_path).name
         p = omexml.image(0).Pixels
