@@ -663,8 +663,8 @@ try:
                                     image = image.reshape(self.frontend.c,y_range,x_range)
                                     image = image[c,...].squeeze()
 
-                                out[y: y+y_range,
-                                    x: x+x_range,
+                                out[y - Y[0]: y + y_range - Y[0],
+                                    x - X[0]: x + x_range - X[0],
                                     zi,
                                     ci,
                                     ti] = image.reshape(y_range,x_range)

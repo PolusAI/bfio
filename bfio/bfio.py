@@ -226,8 +226,12 @@ class BioReader(BioBase):
                                  [Y_tile_start,Y_tile_end],
                                  Z,
                                  C,T,output)
+        
+        output = output[Y[0]-Y_tile_start:Y[1]-Y_tile_start,X[0]-X_tile_start:X[1]-X_tile_start,...]
+        while output.shape[-1] == 1 and output.ndim > 2:
+            output = output[...,0]
 
-        return output[Y[0]-Y_tile_start:Y[1]-Y_tile_start,X[0]-X_tile_start:X[1]-X_tile_start,...]
+        return output
 
     def _fetch(self) -> numpy.ndarray:
         """Method for fetching image supertiles
