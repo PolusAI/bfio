@@ -1292,40 +1292,24 @@ try:
     from napari_plugin_engine import napari_hook_implementation
 
     class NapariReader:
-        """ Special class for import data to Napari
+        """ Special class to read data into Napari
         """
 
         def __init__(self, file: str):
-            """[summary]
-
-            Args:
-                file (str): [description]
-            """
 
             self.br = BioReader(file)
-
-            self.indices = [i for i in reversed(range(5))]
             
         def __call__(self, file):
             
-            return [(self,),]
+            metadata = {
+                'contrast_limits': (numpy.iinfo(self.br.dtype).min,numpy.iinfo(self.br.dtype).max)
+            }
+            
+            return [(self,metadata,'image'),]
 
         def __getitem__(self, keys):
             
-            self.br.logger.warning(keys)
-
-            new_keys = [0 for _ in range(5)]
-            for i, k in enumerate(keys):
-                new_keys[self.indices[i]] = k
-
-            keys = tuple(new_keys)
-            return self.br[keys]
-        
-        @classmethod
-        @napari_hook_implementation(specname="napari_get_reader")
-        def get_reader(cls,path: str):
-        
-            return NapariReader(path)
+            return self.br[tuple(reversed(keys))]
 
         @property
         def dtype(self):
@@ -1333,12 +1317,16 @@ try:
 
         @property
         def shape(self):
-            shape = tuple(self.br.shape[i] for i in [4, 3, 2, 1, 0])
-            return shape
+            return tuple(reversed(self.br.shape))
         
         @property
         def ndim(self):
             return 5
+        
+    @napari_hook_implementation(specname="napari_get_reader")
+    def get_reader(path: str):
+    
+        return NapariReader(path)
 
 except ModuleNotFoundError:
     pass
