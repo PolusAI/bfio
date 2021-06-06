@@ -22,6 +22,7 @@ setup(
         'Documentation': 'https://bfio.readthedocs.io/en/latest/',
         'Source': 'https://github.com/Nicholas-Schaub/polus-plugins/tree/master/utils/polus-bfio-util'
     },
+    entry_points={'napari.plugin': 'bfio = bfio.bfio'},
     packages=find_packages(),
     package_data = {"bfio": ['jars/*.jar','jars/*.properties','VERSION']},
     classifiers=[

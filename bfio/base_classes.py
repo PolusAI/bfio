@@ -184,7 +184,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
                                 ind[dim].append(ind[dim][0]+1)
                         else:
                             ind[dim] = key
-                    elif numpy.issubdtype(key,numpy.integer) or isinstance(key,int):
+                    elif isinstance(key,int) or numpy.issubdtype(key,numpy.integer):
                         ind[dim] = [int(key),int(key)+1]
                     else:
                         raise ValueError('The index in position {} must be a slice type.'.format(dims.find(dim)))
