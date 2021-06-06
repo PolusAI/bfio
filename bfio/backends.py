@@ -1,5 +1,5 @@
 # import core packages
-import struct, copy, zlib, io, typing, logging, threading, shutil
+import struct, copy, io, logging, shutil
 from concurrent.futures import ThreadPoolExecutor
 from tifffile import tifffile
 from pathlib import Path
@@ -796,8 +796,8 @@ try:
 
 except ModuleNotFoundError:
 
-    logger.warning('Java backend is not available. This could be due to a ' +
-                   'missing dependency (jpype).')
+    logger.info('Java backend is not available. This could be due to a ' +
+                'missing dependency (jpype).')
 
     class JavaReader(bfio.base_classes.AbstractReader):
 
@@ -973,8 +973,8 @@ try:
 
 except ModuleNotFoundError:
 
-    logger.warning('Zarr backend is not available. This could be due to a ' +
-                   'missing dependency (i.e. zarr)')
+    logger.info('Zarr backend is not available. This could be due to a ' +
+                'missing dependency (i.e. zarr)')
 
     class ZarrReader(bfio.base_classes.AbstractReader):
 

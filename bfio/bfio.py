@@ -83,7 +83,7 @@ class BioReader(BioBase):
     def __init__(self,
                  file_path: typing.Union[str, Path],
                  max_workers: typing.Union[int, None] = None,
-                 backend: typing.Optional = None) -> None:
+                 backend: typing.Optional[str] = None) -> None:
         """
         Args:
             file_path: Path to file to read
@@ -980,15 +980,6 @@ class BioWriter(BioBase):
             X[1]/self._TILE_SIZE).astype(int) * self._TILE_SIZE
         Y_tile_end = numpy.ceil(
             Y[1]/self._TILE_SIZE).astype(int) * self._TILE_SIZE
-        X_tile_shape = X_tile_end - X_tile_start
-        Y_tile_shape = Y_tile_end - Y_tile_start
-        Z_tile_shape = Z[1]-Z[0]
-
-        # if X[0] != X_tile_start or X[1] != X_tile_end or \
-        #     Y[0] != Y_tile_start or Y[1] != Y_tile_end:
-        #     self.logger.warning('Either X or Y dimension is not a multiple of the' +
-        #                         ' tile size. This may result in the image being' +
-        #                         ' saved incorrectly.')
 
         # Read the image
         self._backend.write_image([X_tile_start, X_tile_end],
@@ -1301,8 +1292,15 @@ try:
     from napari_plugin_engine import napari_hook_implementation
 
     class NapariReader:
+        """ Special class for import data to Napari
+        """
 
-        def __init__(self, file):
+        def __init__(self, file: str):
+            """[summary]
+
+            Args:
+                file (str): [description]
+            """
 
             self.br = BioReader(file)
 
@@ -1322,6 +1320,12 @@ try:
 
             keys = tuple(new_keys)
             return self.br[keys]
+        
+        @classmethod
+        @napari_hook_implementation(specname="napari_get_reader")
+        def get_reader(cls,path: str):
+        
+            return NapariReader(path)
 
         @property
         def dtype(self):
@@ -1335,11 +1339,6 @@ try:
         @property
         def ndim(self):
             return 5
-    
-    @napari_hook_implementation(specname="napari_get_reader")
-    def get_reader(path: str):
-        
-        return NapariReader(path)
-        
+
 except ModuleNotFoundError:
     pass

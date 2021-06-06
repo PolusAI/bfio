@@ -20,13 +20,13 @@ setup(
     long_description_content_type="text/markdown",
     project_urls={
         'Documentation': 'https://bfio.readthedocs.io/en/latest/',
-        'Source': 'https://github.com/Nicholas-Schaub/polus-plugins/tree/master/utils/polus-bfio-util'
+        'Source': 'https://github.com/labshare/bfio'
     },
     entry_points={'napari.plugin': 'bfio = bfio.bfio'},
     packages=find_packages(),
     package_data = {"bfio": ['jars/*.jar','jars/*.properties','VERSION']},
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
