@@ -30,6 +30,7 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Framework :: napari"
     ],
     python_requires='>=3.6',
     install_requires = ['tifffile<=2020.11.18',
