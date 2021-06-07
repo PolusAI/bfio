@@ -1,1 +1,1 @@
-bfio[zarr]==2.1.5
+bfio[zarr]==2.1.6

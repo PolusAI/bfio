@@ -1287,7 +1287,6 @@ class BioWriter(BioBase):
 
         yield
 
-
 try:
     from napari_plugin_engine import napari_hook_implementation
 
@@ -1297,7 +1296,16 @@ try:
 
         def __init__(self, file: str):
 
-            self.br = BioReader(file)
+            # Let BioReader try to guess the backend based on file extension
+            try:
+                self.br = BioReader(file)
+                
+            # If the backend is wrong, fall back to BioFormats
+            except:
+                self.br = BioReader(file,backend='java')
+                
+            # Raise an error if the data type is unrecognized by BioFormats/bfio
+            numpy.iinfo(self.br.dtype).min
             
         def __call__(self, file):
             
@@ -1325,8 +1333,42 @@ try:
         
     @napari_hook_implementation(specname="napari_get_reader")
     def get_reader(path: str):
+        
+        try:
+            reader = NapariReader(path)
+            BioReader.logger.info('Reading with the BioReader.')
+        except Exception as e:
+            BioReader.logger.info(e)
+            reader = None
     
-        return NapariReader(path)
+        return reader
+    
+    @napari_hook_implementation(specname="napari_write_image")
+    def get_writer(path: str,
+                   data: numpy.ndarray,
+                   meta: dict):
+        
+        if isinstance(data,NapariReader):
+            bw = BioWriter(path,metadata=data.br.metadata)
+        
+            bw[:] = data.br[:]
+        else:
+            if meta['rgb']:
+                BioWriter.logger.info('The BioWriter cannot write color images.')
+                return None
+            
+            bw = BioWriter(path)
+            bw.shape = data.shape
+            bw.dtype = data.dtype
+            
+            data = numpy.transpose(data,tuple(reversed(range(data.ndim))))
+            
+            while data.ndim < 5:
+                data = data[...,numpy.newaxis]
+            
+            bw[:] = data
+    
+        return path
 
 except ModuleNotFoundError:
     pass
