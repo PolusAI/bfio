@@ -1084,8 +1084,6 @@ class BioWriter(BioBase):
             split_ind = len(X)
 
         # Untile the data
-        num_rows = Y[0][1] - Y[0][0]
-        num_cols = X[0][1] - X[0][0]
         num_tiles = len(X)
 
         for ind in range(split_ind):

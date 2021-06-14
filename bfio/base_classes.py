@@ -175,6 +175,10 @@ class BioBase(object,metaclass=abc.ABCMeta) :
                     else:
                         ind[dim] = [start,stop]
                         
+                elif key==Ellipsis:
+                    if dims.find(dim)+1 < len(keys):
+                        raise ValueError('Ellipsis may only be used in the first or last index.')
+                    
                 elif isinstance(key,(int,tuple,list)) or numpy.issubdtype(key,numpy.integer):
                     # Only the last three dimensions can use int, tuple, or list indexing
                     if dim in 'CT':
@@ -188,9 +192,6 @@ class BioBase(object,metaclass=abc.ABCMeta) :
                         ind[dim] = [int(key),int(key)+1]
                     else:
                         raise ValueError('The index in position {} must be a slice type.'.format(dims.find(dim)))
-                elif key==Ellipsis:
-                    if dims.find(dim)+1 < len(keys):
-                        raise ValueError('Ellipsis may only be used in the first or last index.')
                 else:
                     raise ValueError('Did not recognize indexing value of type: {}'.format(type(key)))
         
