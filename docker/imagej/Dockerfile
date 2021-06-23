@@ -40,3 +40,5 @@ COPY --from=0 /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/si
 RUN python3 -c 'import imagej; ij = imagej.init("sc.fiji:fiji:2.1.1+net.imagej:imagej-legacy:0.37.4"); print(ij.getVersion())'
 
 RUN rm -rf ~/.m2
+
+WORKDIR ${EXEC_DIR}

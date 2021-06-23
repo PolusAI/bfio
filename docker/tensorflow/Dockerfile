@@ -22,3 +22,5 @@ COPY ./requirements/requirements-base.txt ${EXEC_DIR}/
 # Install bfio and requirements
 RUN pip3 install -r ${EXEC_DIR}/requirements-base.txt --no-cache-dir --no-dependencies && \
     rm -rf /usr/local/lib/python3.9/site-packages/bfio/jars
+    
+WORKDIR ${EXEC_DIR}

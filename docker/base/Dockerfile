@@ -31,3 +31,5 @@ COPY ./requirements/requirements-base.txt /
 # Install requirements
 RUN pip3 install -r /requirements-base.txt --no-cache-dir && \
     rm /requirements-base.txt
+
+WORKDIR ${EXEC_DIR}
