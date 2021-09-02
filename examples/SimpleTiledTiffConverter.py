@@ -1,5 +1,4 @@
-from bfio import BioReader, BioWriter, LOG4J, JARS
-import javabridge
+from bfio import BioReader, BioWriter
 from pathlib import Path
 import requests
 import numpy as np
@@ -17,26 +16,17 @@ if not (PATH / FILENAME).exists():
     (PATH / FILENAME).open("wb").write(content)
 
 """ Convert the tif to tiled tiff """
-javabridge.start_vm(args=["-Dlog4j.configuration=file:{}".format(LOG4J)],
-                    class_path=JARS,
-                    run_headless=True)
+# Set up the BioReader
+with BioReader(PATH / FILENAME,backend='java') as br, \
+    BioWriter(PATH / 'out.ome.tif',metadata=br.metadata,backend='python') as bw:
 
-try:
-    # Set up the BioReader
-    with BioReader(PATH / FILENAME,backend='java') as br, \
-        BioWriter(PATH / 'out.ome.tif',metadata=br.metadata,backend='python') as bw:
+    # Print off some information about the image before loading it
+    print('br.shape: {}'.format(br.shape))
+    print('br.dtype: {}'.format(br.dtype))
     
-        # Print off some information about the image before loading it
-        print('br.shape: {}'.format(br.shape))
-        print('br.dtype: {}'.format(br.dtype))
-        
-        # Read in the original image, then save
-        original_image = br[:]
-        bw[:] = original_image
-    
-finally:
-    # Close the javabridge. Since this is in the finally block, it is always run
-    javabridge.kill_vm()
+    # Read in the original image, then save
+    original_image = br[:]
+    bw[:] = original_image
 
 # Compare the original and saved images using the Python backend
 br = BioReader(PATH.joinpath('out.ome.tif'))

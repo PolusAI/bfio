@@ -1,4 +1,5 @@
 __pycache__
+,vscode
 docs/build
 dist
 build
@@ -6,3 +7,4 @@ bfio.egg-info
 examples/data
 .pytest_cache
 bfio/VERSION
+tests/data
