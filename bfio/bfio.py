@@ -82,8 +82,9 @@ class BioReader(BioBase):
 
     def __init__(self,
                  file_path: typing.Union[str, Path],
+                 series_idx:typing.Union[int,None] = 0,
                  max_workers: typing.Union[int, None] = None,
-                 backend: typing.Optional[str] = None) -> None:
+                 backend: typing.Optional[str] = None,) -> None:
         """
         Args:
             file_path: Path to file to read
@@ -96,6 +97,7 @@ class BioReader(BioBase):
 
         # Initialize BioBase
         super(BioReader, self).__init__(file_path,
+                                        series_idx=series_idx,
                                         max_workers=max_workers,
                                         backend=backend)
 
