@@ -79,6 +79,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     
     def __init__(self,
                  file_path: typing.Union[str,Path],
+                 series_idx: typing.Union[int, None] = 0,
                  max_workers: typing.Optional[int] = None,
                  backend: typing.Optional[str] = None,
                  read_only: typing.Optional[bool] = True):
@@ -99,7 +100,10 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         if isinstance(file_path,str):
             file_path = Path(file_path)
         self._file_path = file_path
-        
+        if series_idx is None:
+            series_idx = 0
+        self._series_idx = series_idx
+
         # validate/set the backend
         if backend == None:
             extension = ''.join(self._file_path.suffixes)
@@ -209,7 +213,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __getattribute__(self,name):
         # Get image dimensions using num_x, x, or X
         if (len(name)==1 and name.lower() in 'xyzct'):
-            return getattr(self._metadata.image().Pixels,'get_Size{}'.format(name.upper()))()
+            return getattr(self._metadata.image(self._series_idx).Pixels,'get_Size{}'.format(name.upper()))()
         else:
             return object.__getattribute__(self,name)
         
@@ -223,21 +227,21 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __xyzct_setter(self,dimension,value):
         assert not self._read_only, self._READ_ONLY_MESSAGE.format(dimension.lower())
         assert value >= 1, "{} must be >= 0".format(dimension.upper())
-        setattr(self._metadata.image(0).Pixels,'Size{}'.format(dimension.upper()),value)
+        setattr(self._metadata.image(self._series_idx).Pixels,'Size{}'.format(dimension.upper()),value)
         self._DIMS[dimension.upper()] = value
         if dimension.upper() == 'C':
-            self._metadata.image(0).Pixels.channel_count = value
-        self._metadata.image().Pixels.tiffdata_count = self.Z * self.C * self.T
+            self._metadata.image(self._series_idx).Pixels.channel_count = value
+        self._metadata.image(self._series_idx).Pixels.tiffdata_count = self.Z * self.C * self.T
         
         count = 0
         for z in range(self.Z):
             for c in range(self.C):
                 for t in range(self.T):
-                    self._metadata.image().Pixels.tiffdata(count).FirstZ = z
-                    self._metadata.image().Pixels.tiffdata(count).FirstC = c
-                    self._metadata.image().Pixels.tiffdata(count).FirstT = t
-                    self._metadata.image().Pixels.tiffdata(count).IFD = count
-                    self._metadata.image().Pixels.tiffdata(count).plane_count = 1
+                    self._metadata.image(self._series_idx).Pixels.tiffdata(count).FirstZ = z
+                    self._metadata.image(self._series_idx).Pixels.tiffdata(count).FirstC = c
+                    self._metadata.image(self._series_idx).Pixels.tiffdata(count).FirstT = t
+                    self._metadata.image(self._series_idx).Pixels.tiffdata(count).IFD = count
+                    self._metadata.image(self._series_idx).Pixels.tiffdata(count).plane_count = 1
                     count += 1
     
     """ ------------------------------ """
@@ -246,7 +250,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     @property
     def channel_names(self) -> typing.List[str]:
         """Get the channel names for the image"""
-        image = self._metadata.image()
+        image = self._metadata.image(self._series_idx)
         return [image.Pixels.Channel(i).Name for i in range(0, self.C)]
         
     @channel_names.setter
@@ -254,7 +258,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         assert not self._read_only, self._READ_ONLY_MESSAGE.format("channel_names")
         assert len(cnames) == self.C, "Number of names does not match number of channels."
         for i in range(0, len(cnames)):
-            self._metadata.image(0).Pixels.Channel(i).Name = '' if cnames[i] == None else cnames[i]
+            self._metadata.image(self._series_idx).Pixels.Channel(i).Name = '' if cnames[i] == None else cnames[i]
 
     @property
     def shape(self) -> typing.Tuple[int,int,int,int,int]:
@@ -285,8 +289,8 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     def __physical_size(self,dimension,psize,units):
         if psize != None and units != None:
             assert not self._read_only, self._READ_ONLY_MESSAGE.format("physical_size_{}".format(dimension.lower()))
-            setattr(self._metadata.image(0).Pixels,'PhysicalSize{}'.format(dimension.upper()),psize)
-            setattr(self._metadata.image(0).Pixels,'PhysicalSize{}Unit'.format(dimension.upper()),units)
+            setattr(self._metadata.image(self._series_idx).Pixels,'PhysicalSize{}'.format(dimension.upper()),psize)
+            setattr(self._metadata.image(self._series_idx).Pixels,'PhysicalSize{}Unit'.format(dimension.upper()),units)
 
     @property
     def physical_size_x(self) -> typing.Tuple[float,str]:
@@ -295,7 +299,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
-        return (self._metadata.image(0).Pixels.PhysicalSizeX, self._metadata.image(0).Pixels.PhysicalSizeXUnit)
+        return (self._metadata.image(self._series_idx).Pixels.PhysicalSizeX, self._metadata.image(self._series_idx).Pixels.PhysicalSizeXUnit)
 
     @physical_size_x.setter
     def physical_size_x(self,size_units: tuple):
@@ -317,7 +321,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
-        return (self._metadata.image(0).Pixels.PhysicalSizeY, self._metadata.image(0).Pixels.PhysicalSizeYUnit)
+        return (self._metadata.image(self._series_idx).Pixels.PhysicalSizeY, self._metadata.image(self._series_idx).Pixels.PhysicalSizeYUnit)
 
     @physical_size_y.setter
     def physical_size_y(self,size_units: tuple):
@@ -339,7 +343,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
-        return (self._metadata.image(0).Pixels.PhysicalSizeZ, self._metadata.image(0).Pixels.PhysicalSizeZUnit)
+        return (self._metadata.image(self._series_idx).Pixels.PhysicalSizeZ, self._metadata.image(self._series_idx).Pixels.PhysicalSizeZUnit)
 
     @physical_size_z.setter
     def physical_size_z(self,size_units: tuple):
@@ -419,7 +423,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     @property
     def dtype(self) -> numpy.dtype:
         """The numpy pixel type of the data"""
-        return self._DTYPE[self._metadata.image(0).Pixels.PixelType]
+        return self._DTYPE[self._metadata.image(self._series_idx).Pixels.PixelType]
     
     @dtype.setter
     def dtype(self,dtype):
@@ -430,18 +434,18 @@ class BioBase(object,metaclass=abc.ABCMeta) :
         assert dtype in self._DTYPE.values(), "Invalid data type."
         for k,v in self._DTYPE.items():
             if dtype==v:
-                self._metadata.image(0).Pixels.PixelType = k
+                self._metadata.image(self._series_idx).Pixels.PixelType = k
                 return
         
     @property
     def samples_per_pixel(self) -> int:
         """Number of samples per pixel"""
-        return self._metadata.image().Pixels.Channel().SamplesPerPixel
+        return self._metadata.image(self._series_idx).Pixels.Channel().SamplesPerPixel
     
     @samples_per_pixel.setter
     def samples_per_pixel(self,
                           samples_per_pixel: int):
-        self._metadata.image().Pixels.Channel().SamplesPerPixel = samples_per_pixel
+        self._metadata.image(self._series_idx).Pixels.Channel().SamplesPerPixel = samples_per_pixel
 
     @property
     def spp(self):
@@ -455,7 +459,7 @@ class BioBase(object,metaclass=abc.ABCMeta) :
     @property
     def bytes_per_pixel(self) -> int:
         """Number of bytes per pixel"""
-        return self._BPP[self._metadata.image().Pixels.get_PixelType()]
+        return self._BPP[self._metadata.image(self._series_idx).Pixels.get_PixelType()]
     
     @bytes_per_pixel.setter
     def bytes_per_pixel(self,
