@@ -622,6 +622,7 @@ try:
             self._rdr.setOriginalMetadataPopulated(True)
             self._rdr.setMetadataStore(self.omexml)
             self._rdr.setId(JString(str(self.frontend._file_path.absolute())))
+            self._rdr.setSeries(JInt(self.frontend._series_idx))
 
         def read_metadata(self, update=False):
 
