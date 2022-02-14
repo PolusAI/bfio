@@ -26,4 +26,4 @@ Zarr
 To use the zarr backend, you need to have Zarr already installed, or you can
 install it when installing bfio using:
 
-pip install bfio['jpype']
+pip install bfio['zarr']
