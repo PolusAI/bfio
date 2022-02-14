@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy
 
-from bfio import JARS, LOG4J, OmeXml, backends
+from bfio import JARS, LOGBACK, OmeXml, backends
 from bfio.base_classes import BioBase
 
 try:
@@ -30,14 +30,14 @@ try:
             return JAR_VERSION
 
         logging.getLogger("bfio.start").info("Starting the jvm.")
-        jpype.startJVM("-Dlog4j.configuration=file:{}".format(LOG4J), classpath=JARS)
+        jpype.startJVM(f"-Dlogback.configurationFile={LOGBACK}", classpath=JARS)
 
         from loci.formats import FormatTools
 
         JAR_VERSION = FormatTools.VERSION
 
         logging.getLogger("bfio.start").info(
-            "loci_tools.jar version = {}".format(JAR_VERSION)
+            "bioformats_package.jar version = {}".format(JAR_VERSION)
         )
 
         return JAR_VERSION
@@ -784,7 +784,7 @@ class BioWriter(BioBase):
         backend: typing.Optional[str] = None,
         metadata: typing.Union[OmeXml.OMEXML, None] = None,
         image: typing.Union[numpy.ndarray, None] = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Initialize a BioWriter.
 
