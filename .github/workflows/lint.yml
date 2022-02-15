@@ -1,0 +1,25 @@
+name: Flake8
+
+on: ["push","pull_request"]
+
+jobs:
+  lint:
+    name: "flake8"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: Checkout 🛎️
+        uses: "actions/checkout@v2"
+
+      - name: Install dependencies 🔧
+        run: |
+          sudo apt update
+          sudo apt install python3-venv python3-pip -y
+          python -VV
+          python -m site
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install flake8
+          python -m pip install flake8-github-actions
+
+      - name: "Run Flake8"
+        run: "flake8 --format github"
