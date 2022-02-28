@@ -5,7 +5,7 @@ import pathlib
 
 JAR_VERSION = None
 JARS = None
-LOG4J = None
+LOGBACK = None
 
 logging.basicConfig(
     format="%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s",
@@ -29,20 +29,19 @@ logger.info("VERSION = {}".format(__version__))
 if pathlib.Path(__file__).parent.joinpath("jars").is_dir():
 
     try:
-        import jpype  # NOQA: F401
 
         _jars_dir = pathlib.Path(__file__).parent.joinpath("jars")
 
         JAR_VERSION = "Use bfio.start() to get JAR_VERSION."
 
-        JARS = [str(_jars_dir.joinpath("loci_tools.jar").absolute())]
+        JARS = [str(_jars_dir.joinpath("bioformats_package.jar").absolute())]
 
-        LOG4J = str(_jars_dir.joinpath("log4j.properties").absolute())
+        LOGBACK = str(_jars_dir.joinpath("logback.xml").absolute())
 
     except ModuleNotFoundError:
         JAR_VERSION = None
         JARS = None
-        LOG4J = None
+        LOGBACK = None
         logger.info(
             "jpype has not been installed. "
             + "Can only use Python backend for reading/writing images."
@@ -50,7 +49,7 @@ if pathlib.Path(__file__).parent.joinpath("jars").is_dir():
 
 else:
     logger.info(
-        "The loci_tools.jar is not present."
+        "The bioformats_package.jar is not present."
         + "Can only use Python backend for reading/writing images."
     )
 
