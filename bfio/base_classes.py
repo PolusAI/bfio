@@ -275,14 +275,14 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert not self._read_only, self._READ_ONLY_MESSAGE.format(dimension.lower())
         assert value >= 1, "{} must be >= 0".format(dimension.upper())
         setattr(
-            self._metadata.image(0).Pixels, "Size{}".format(dimension.upper()), value
+            self._metadata.images[0].pixels, "size_{}".format(dimension.lower()), value
         )
         self._DIMS[dimension.upper()] = value
         if dimension.upper() == "C":
-            self._metadata.images[0].Pixels.channels = [
+            self._metadata.images[0].pixels.channels = [
                 ome_types.model.Channel.construct() for _ in range(value)
             ]
-        self._metadata.image[0].Pixels.tiff_data_blocks = [
+        self._metadata.image[0].pixels.tiff_data_blocks = [
             ome_types.model.TiffData.construct() for _ in range(value)
         ]
 
@@ -316,7 +316,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
         for i in range(0, len(cnames)):
-            self._metadata.image[0].Pixels.Channel(i).Name = (
+            self._metadata.image[0].pixels.channels[i].Name = (
                 "" if cnames[i] is None else cnames[i]
             )
 
@@ -352,12 +352,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
                 "physical_size_{}".format(dimension.lower())
             )
             setattr(
-                self._metadata.image(0).Pixels,
+                self._metadata.images[0].pixels,
                 "PhysicalSize{}".format(dimension.upper()),
                 psize,
             )
             setattr(
-                self._metadata.image(0).Pixels,
+                self._metadata.images[0].pixels,
                 "PhysicalSize{}Unit".format(dimension.upper()),
                 units,
             )
