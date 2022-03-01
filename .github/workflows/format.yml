@@ -12,8 +12,8 @@ jobs:
 
       - name: Install dependencies 🔧
         run: |
-          apt update
-          apt install python3.8-venv -y
+          sudo apt update
+          sudo apt install python3.8-venv -y
     
       - uses: psf/black@stable
         with:
