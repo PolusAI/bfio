@@ -1,6 +1,6 @@
 name: Format
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   format:
@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install python3.8-venv -y
-    
+
       - uses: psf/black@stable
         with:
           options: "--check --color --verbose"
