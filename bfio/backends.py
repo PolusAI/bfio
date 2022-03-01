@@ -282,7 +282,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self.frontend._metadata.image().set_ID(Path(self.frontend._file_path).name)
 
-        if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2 ** 31:
+        if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True
         else:
             big_tiff = False
@@ -372,9 +372,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             if len(bytecounts) == 1:
                 return {4: "I", 8: "Q"}[size]
             bytecount = bytecounts[0] * 10
-            if bytecount < 2 ** 16:
+            if bytecount < 2**16:
                 return "H"
-            if bytecount < 2 ** 32:
+            if bytecount < 2**32:
                 return "I"
             if size == 4:
                 return "I"
@@ -390,7 +390,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._numtiles = tifffile.product(self._tiles)
         self._databytecounts = [
-            self.frontend._TILE_SIZE ** 2 * self._datadtype.itemsize
+            self.frontend._TILE_SIZE**2 * self._datadtype.itemsize
         ] * self._numtiles
         self._bytecountformat = bytecount_format(self._databytecounts)
         self._addtag(
@@ -801,7 +801,7 @@ try:
             writer = OMETiffWriter()
 
             # Set big tiff flag if file will be larger than 2GB
-            if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2 ** 31:
+            if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
                 writer.setBigTiff(True)
             else:
                 writer.setBigTiff(False)

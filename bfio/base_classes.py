@@ -42,7 +42,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
     """
 
     # Set constants for reading/writing images
-    _MAX_BYTES = 2 ** 30
+    _MAX_BYTES = 2**30
     _DTYPE = {
         "uint8": numpy.uint8,
         "int8": numpy.int8,
@@ -63,7 +63,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         "float": 4,
         "double": 8,
     }
-    _TILE_SIZE = 2 ** 10
+    _TILE_SIZE = 2**10
     _CHUNK_SIZE = None
 
     _DIMS = {}
