@@ -6,8 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy
+import ome_types
 
-from bfio import JARS, LOG4J, OmeXml, backends
+from bfio import JARS, LOG4J, backends
 from bfio.base_classes import BioBase
 
 try:
@@ -782,7 +783,7 @@ class BioWriter(BioBase):
         file_path: typing.Union[str, Path],
         max_workers: typing.Union[int, None] = None,
         backend: typing.Optional[str] = None,
-        metadata: typing.Union[OmeXml.OMEXML, None] = None,
+        metadata: typing.Union[ome_types.model.OME, None] = None,
         image: typing.Union[numpy.ndarray, None] = None,
         **kwargs
     ) -> None:
@@ -810,11 +811,13 @@ class BioWriter(BioBase):
         )
 
         if metadata:
-            assert metadata.__class__.__name__ == "OMEXML"
-            self._metadata = OmeXml.OMEXML(str(metadata))
-            self._metadata.image(0).Name = self._file_path.name
-            self._metadata.image().Pixels.channel_count = self.C
-            self._metadata.image().Pixels.DimensionOrder = OmeXml.DO_XYZCT
+            assert metadata.__class__.__name__ == "OME"
+            self._metadata = ome_types.from_xml(ome_types.to_xml(metadata))
+            self._metadata.images[0].Name = self._file_path.name
+            self._metadata.images[0].Pixels.channel_count = self.C
+            self._metadata.image[
+                0
+            ].Pixels.DimensionOrder = ome_types.model.Pixels.dimension_order.XYZCT
         else:
             self._metadata = self._minimal_xml()
 
@@ -934,26 +937,26 @@ class BioWriter(BioBase):
 
         self.write(value, **ind)
 
-    def _minimal_xml(self) -> OmeXml.OMEXML:
+    def _minimal_xml(self) -> ome_types.model.OME:
         """Generates minimal xml for ome tif initialization.
 
         Returns:
-            OMEXML object
+            ome_types.model.OME
         """
         assert (
             not self._read_only
         ), "The image has started to be written. To modify the xml again, reinitialize."
-        omexml = OmeXml.OMEXML()
-        omexml.image(0).Name = Path(self._file_path).name
-        p = omexml.image(0).Pixels
+        omexml = ome_types.model.OME.construct()
+        omexml.image[0].name = Path(self._file_path).name
+        p = omexml.image[0].pixels
 
-        assert isinstance(p, omexml.Pixels)
+        assert isinstance(p, ome_types.model.Pixels)
 
-        for d in "XYZCT":
-            setattr(p, "Size{}".format(d), 1)
+        for d in "xyzct":
+            setattr(p, "size_{}".format(d), 1)
 
-        p.DimensionOrder = OmeXml.DO_XYZCT
-        p.PixelType = "uint8"
+        p.dimension_order = ome_types.model.Pixels.dimension_order.XYZCT
+        p.type = ome_types.model.simple_types.UINT8
         p.channel_count = 1
 
         return omexml

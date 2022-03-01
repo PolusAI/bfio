@@ -1,8 +1,9 @@
 repos:
   - repo: https://github.com/psf/black
-    rev: 21.12b0
+    rev: 22.1.0
     hooks:
       - id: black
+        args: ["--check", "--color"]
   - repo: https://github.com/PyCQA/flake8
     rev: 4.0.1
     hooks:
