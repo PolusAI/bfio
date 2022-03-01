@@ -24,7 +24,7 @@ setup(
     },
     entry_points={"napari.plugin": "bfio = bfio.bfio"},
     packages=find_packages(),
-    package_data={"bfio": ["jars/*.jar", "jars/*.properties", "VERSION"]},
+    package_data={"bfio": ["jars/*.jar", "jars/*.xml", "VERSION"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
