@@ -824,7 +824,7 @@ class BioWriter(BioBase):
                 ), "Image can be at most 5-dimensional (x,y,z,c,t)."
                 self.spp = 1
                 self.dtype = image.dtype
-                for k, v in zip(image.shape, "YXZCT"):
+                for k, v in zip("YXZCT", image.shape):
                     setattr(self, k, v)
 
             elif kwargs:
