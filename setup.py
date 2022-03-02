@@ -42,5 +42,6 @@ setup(
         "jpype": ["jpype1>=1.2.1"],
         "zarr": ["zarr>=2.6.1"],
         "all": ["jpype1>=1.2.1", "zarr>=2.6.1"],
+        "dev": ["jpype1>=1.2.1", "zarr>=2.6.1", "requests>=2.26.0"],
     },
 )

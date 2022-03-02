@@ -6,12 +6,12 @@ FROM maven:3-jdk-8-slim
 # Copy Python 3.9
 COPY --from=python:3.9 / /
 
-# Copy the requirements file
-COPY ./requirements/requirements-base.txt /
+# Copy the source
+COPY . /bfio_src
 
-# Install requirements
-RUN apt-get update && \
-    pip3 install -r  /requirements-base.txt --no-cache-dir
+# Install
+RUN pip3 install /bfio_src[all] --no-cache-dir && \
+    rm -rf /bfio_src
 
 # Install packages
 ENV LIBRARY_PATH=/lib:/usr/lib
@@ -40,5 +40,3 @@ RUN mkdir ${EXEC_DIR} && \
 RUN python3 -c 'import imagej; ij = imagej.init("sc.fiji:fiji:2.1.1+net.imagej:imagej-legacy:0.37.4"); print(ij.getVersion())'
 
 RUN rm -rf ~/.m2
-
-WORKDIR ${EXEC_DIR}

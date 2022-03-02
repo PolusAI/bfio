@@ -11,7 +11,8 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}}
+    mkdir ${DATA_DIR}} && \
+    mkdir /bfio_src
 
 # Instal Python
 RUN apt update && \
@@ -25,11 +26,9 @@ RUN apt update && \
 
 RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
-# Copy the requirements file
-COPY ./requirements/requirements-base.txt /
+# Copy the source
+COPY . /bfio_src
 
-# Install requirements
-RUN pip3 install -r /requirements-base.txt --no-cache-dir && \
-    rm /requirements-base.txt
-
-WORKDIR ${EXEC_DIR}
+# Install
+RUN pip3 install /bfio_src[all] --no-cache-dir && \
+    rm -rf /bfio_src

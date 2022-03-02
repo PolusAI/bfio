@@ -1,0 +1,21 @@
+name: Format
+
+on: [pull_request]
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v2
+
+      - name: Install dependencies 🔧
+        run: |
+          sudo apt update
+          sudo apt install python3.8-venv -y
+
+      - uses: psf/black@stable
+        with:
+          options: "--check --color --verbose"
+          src: "./bfio"
