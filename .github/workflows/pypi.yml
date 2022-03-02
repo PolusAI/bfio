@@ -25,7 +25,7 @@ jobs:
 
       - name: Publish to PyPi
         env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USER }}
+          TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           python setup.py sdist bdist_wheel --universal
