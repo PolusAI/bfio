@@ -37,6 +37,7 @@ setup(
         "tifffile<=2020.11.18",
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
+        "ome-types>=0.2.10",
     ],
     extras_require={
         "jpype": ["jpype1>=1.2.1"],

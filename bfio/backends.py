@@ -12,12 +12,11 @@ import imagecodecs
 # Third party packages
 import numpy
 from tifffile import tifffile
+import ome_types
 
 # bfio internals
 import bfio
 import bfio.base_classes
-from bfio import OmeXml
-from bfio.OmeXml import OMEXML
 
 logging.basicConfig(
     format="%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s",
@@ -38,8 +37,8 @@ class PythonReader(bfio.base_classes.AbstractReader):
         self.logger.debug("__init__(): Initializing _rdr (tifffile.TiffFile)...")
         self._rdr = tifffile.TiffFile(self.frontend._file_path)
         metadata = self.read_metadata()
-        width = metadata.image().Pixels.get_SizeX()
-        height = metadata.image().Pixels.get_SizeY()
+        width = metadata.images[0].Pixels.size_x()
+        height = metadata.image[0].Pixels.size_y()
 
         for tag in self._rdr.pages[0].tags:
             logger.debug(tag)
@@ -80,7 +79,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
-        return OMEXML(self._rdr.ome_metadata)
+        return ome_types.from_xml(self._rdr.ome_metadata)
 
     def _chunk_indices(self, X, Y, Z):
 
@@ -280,7 +279,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._tags = []
 
-        self.frontend._metadata.image().set_ID(Path(self.frontend._file_path).name)
+        self.frontend._metadata.image[0].id(Path(self.frontend._file_path).name)
 
         if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True
@@ -330,7 +329,8 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 "and back up the original data before doing so. For more ",
                 "information, see the OME-TIFF web site: ",
                 "https://docs.openmicroscopy.org/latest/ome-model/ome-tiff/. -->",
-                str(self.frontend._metadata).replace("ome:", "").replace(":ome", ""),
+                ome_types.to_xml(self.frontend._metadata),
+                # str(self.frontend._metadata).replace("ome:", "").replace(":ome", ""),
             ]
         )
 
@@ -688,7 +688,7 @@ try:
 
         def read_metadata(self, update=False):
 
-            return OMEXML(str(self.omexml.dumpXML()))
+            return ome_types.from_xml(str(self.omexml.dumpXML()))
 
         def _read_image(self, X, Y, Z, C, T, output):
 
@@ -808,11 +808,12 @@ try:
 
             # Set the metadata
             service = ServiceFactory().getInstance(OMEXMLService)
-            xml = (
-                str(self.frontend.metadata)
-                .replace("<ome:", "<")
-                .replace("</ome:", "</")
-            )
+            xml = ome_types.to_xml(self.frontend.metadata)
+            # xml = (
+            #     str(self.frontend.metadata)
+            #     .replace("<ome:", "<")
+            #     .replace("</ome:", "</")
+            # )
             metadata = service.createOMEXMLMetadata(xml)
             writer.setMetadataRetrieve(metadata)
 
@@ -882,16 +883,12 @@ except ModuleNotFoundError:
     class JavaReader(bfio.base_classes.AbstractReader):
         def __init__(self, frontend):
 
-            raise ImportError(
-                "JavaReader class unavailable. Could not import" + " jpype."
-            )
+            raise ImportError("JavaReader class unavailable. Could not import jpype.")
 
     class JavaWriter(bfio.base_classes.AbstractWriter):
         def __init__(self, frontend):
 
-            raise ImportError(
-                "JavaWriter class unavailable. Could not import" + " jpype."
-            )
+            raise ImportError("JavaWriter class unavailable. Could not import jpype.")
 
 
 try:
@@ -914,12 +911,12 @@ try:
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
             if "metadata" in self._root.attrs.keys():
-                return OMEXML(self._root.attrs["metadata"])
+                return ome_types.from_xml(self._root.attrs["metadata"])
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
-                omexml = OMEXML()
-                omexml.image(0).Name = Path(self.frontend._file_path).name
-                p = omexml.image(0).Pixels
+                omexml = ome_types.model.OME.construct()
+                omexml.images[0].Name = Path(self.frontend._file_path).name
+                p = omexml.images[0].Pixels
 
                 for i, d in enumerate("XYZCT"):
                     setattr(p, "Size{}".format(d), self._rdr.shape[4 - i])
@@ -928,7 +925,7 @@ try:
                 for i in range(0, p.SizeC):
                     p.Channel(i).Name = ""
 
-                p.DimensionOrder = OmeXml.DO_XYZCT
+                p.DimensionOrder = ome_types.model.pixels.DimensionOrder.XYZCT
 
                 dtype = numpy.dtype(self._rdr.dtype.name).type
                 for k, v in self.frontend._DTYPE.items():
