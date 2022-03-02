@@ -16,14 +16,14 @@ Docker containers with all necessary components are available (see
 
 ## Summary
 
-  - [Installation](#installation)
-  - [Docker](#docker)
-  - [Documentation](#documentation)
-  - [Contributing](#contributing)
-  - [Versioning](#versioning)
-  - [Authors](#authors)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
+- [Installation](#installation)
+- [Docker](#docker)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Versioning](#versioning)
+- [Authors](#authors)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Installation
 
@@ -88,5 +88,5 @@ details
 
 ## Acknowledgments
 
-  - Parts of this code were written/modified from existing code found in
+- Parts of this code were written/modified from existing code found in
     `tifffile`.
