@@ -26,9 +26,9 @@ RUN apt update && \
 
 RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
-# Copy the requirements file
+# Copy the source
 COPY . /bfio_src
 
-# Install requirements
-RUN pip3 install /bfio_src/ --no-cache-dir && \
+# Install
+RUN pip3 install /bfio_src[all] --no-cache-dir && \
     rm -rf /bfio_src
