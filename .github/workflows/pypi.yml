@@ -1,4 +1,4 @@
-name: Docker
+name: PyPi
 
 on:
   push:
@@ -21,6 +21,7 @@ jobs:
 
       - name: Build bfio
         run: |
+          python -m pip install wheel
           python setup.py sdist bdist_wheel --universal
 
       - name: Publish to PyPi

@@ -34,7 +34,7 @@ jobs:
           context: .
           file: ./docker/base/Dockerfile
           push: true
-          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version-without-v }}
+          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version }}
 
       - name: Publish Tensorflow Container 🐳
         uses: docker/build-push-action@v2
@@ -42,7 +42,7 @@ jobs:
           context: .
           file: ./docker/tensorflow/Dockerfile
           push: true
-          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version-without-v }}-tensorflow
+          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version }}-tensorflow
 
       - name: Publish ImageJ Container 🐳
         uses: docker/build-push-action@v2
@@ -50,4 +50,4 @@ jobs:
           context: .
           file: ./docker/imagej/Dockerfile
           push: true
-          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version-without-v }}-imagej
+          tags: labshare/polus-bfio-util:${{ steps.get_version.outputs.version }}-imagej
