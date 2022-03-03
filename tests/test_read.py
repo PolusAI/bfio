@@ -109,7 +109,6 @@ class TestSimpleRead(unittest.TestCase):
             self.assertEqual(br.shape[1], 672)
             self.assertEqual(br.shape[2], 21)
             self.assertEqual(br.shape[3], 3)
-            self.assertEqual(br.shape[4], 1)
             self.assertEqual(br.dtype, np.uint16)
             assert all(i == b for i, b in zip(I.shape, br.shape))
             assert br.dtype == I.dtype

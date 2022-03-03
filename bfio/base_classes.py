@@ -328,7 +328,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
             (:attr:`~.Y`, :attr:`~.X`, :attr:`~.Z`, :attr:`~.C`, :attr:`~.T`)
             shape of the image
         """
-        return tuple(getattr(self, d) for d in "yxzct")
+
+        shape = tuple(getattr(self, d) for d in "yxzct")
+        while shape[-1] == 1:
+            shape = shape[:-1]
+
+        return shape
 
     @shape.setter
     def shape(self, new_shape: typing.Tuple[int, int, int, int, int]):
@@ -731,6 +736,8 @@ class AbstractReader(AbstractBackend):
 
     All reader objects must be a subclass of AbstractReader.
     """
+
+    _metadata: ome_types.OME = None
 
     @abc.abstractmethod
     def __init__(self, frontend: BioBase):

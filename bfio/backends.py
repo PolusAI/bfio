@@ -6,13 +6,16 @@ import shutil
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
-import imagecodecs
+from typing import Optional
 
 # Third party packages
+import imagecodecs
 import numpy
-from tifffile import tifffile
 import ome_types
+import re
+from tifffile import tifffile
+from xmlschema.validators.exceptions import XMLSchemaValidationError
+from xml.etree import ElementTree as ET
 
 # bfio internals
 import bfio
@@ -24,21 +27,330 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bfio.backends")
 
+KNOWN_INVALID_OME_XSD_REFERENCES = [
+    "www.openmicroscopy.org/Schemas/ome/2013-06",
+    "www.openmicroscopy.org/Schemas/OME/2012-03",
+]
+REPLACEMENT_OME_XSD_REFERENCE = "www.openmicroscopy.org/Schemas/OME/2016-06"
+
+ome_formats = {
+    "detector_id": lambda x: f"Detector:{x}",
+    "instrument_id": lambda x: f"Instrument:{x}",
+    "image_id": lambda x: f"Image:{x}",
+}
+
+
+def clean_ome_xml_for_known_issues(xml: str) -> str:
+    """Clean an OME XML string.
+
+    This was modified from from AICSImageIO:
+    https://github.com/AllenCellModeling/aicsimageio/blob/240c1c76a7e884aa37e11a1fbe0fcbb89fea6515/aicsimageio/metadata/utils.py#L187
+    """
+    # Store list of changes to print out with warning
+    metadata_changes = []
+
+    # Fix xsd reference
+    # This is from OMEXML object just having invalid reference
+    for known_invalid_ref in KNOWN_INVALID_OME_XSD_REFERENCES:
+        if known_invalid_ref in xml:
+            xml = xml.replace(
+                known_invalid_ref,
+                REPLACEMENT_OME_XSD_REFERENCE,
+            )
+            metadata_changes.append(
+                f"Replaced '{known_invalid_ref}' with "
+                f"'{REPLACEMENT_OME_XSD_REFERENCE}'."
+            )
+
+    # Read in XML
+    root = ET.fromstring(xml)
+
+    # Get the namespace
+    # In XML etree this looks like
+    # "{http://www.openmicroscopy.org/Schemas/OME/2016-06}"
+    # and must prepend any etree finds
+    namespace_matches = re.match(r"\{.*\}", root.tag)
+    if namespace_matches is not None:
+        namespace = namespace_matches.group(0)
+    else:
+        raise ValueError("XML does not contain a namespace")
+
+    # Fix MicroManager Instrument and Detector
+    instrument = root.find(f"{namespace}Instrument")
+    if instrument is not None:
+        instrument_id = instrument.get("ID")
+        if instrument_id == "Microscope":
+            ome_instrument_id = ome_formats["instrument_id"](0)
+            instrument.set("ID", ome_instrument_id)
+            metadata_changes.append(
+                f"Updated attribute 'ID' from '{instrument_id}' to "
+                f"'{ome_instrument_id}' on Instrument element."
+            )
+
+            for detector_index, detector in enumerate(
+                instrument.findall(f"{namespace}Detector")
+            ):
+                detector_id = detector.get("ID")
+                if detector_id is not None:
+                    # Create ome detector id if needed
+                    ome_detector_id = None
+                    if detector_id == "Camera":
+                        ome_detector_id = ome_formats["detector_id"](detector_index)
+                    elif not detector_id.startswith("Detector:"):
+                        ome_detector_id = ome_formats["detector_id"](detector_id)
+
+                    # Apply ome detector id if replaced
+                    if ome_detector_id is not None:
+                        detector.set("ID", ome_detector_id)
+                        metadata_changes.append(
+                            f"Updated attribute 'ID' from '{detector_id}' to "
+                            f"'{ome_detector_id}' on Detector element at "
+                            f"position {detector_index}."
+                        )
+
+    # Find all Image elements and fix IDs and refs to fixed instruments
+    # This is for certain for test files of o.urs and ACTK files
+    for image_index, image in enumerate(root.findall(f"{namespace}Image")):
+        image_id = image.get("ID")
+        if image_id is not None:
+            found_image_id = image_id
+
+            if not found_image_id.startswith("Image"):
+                ome_image_id = ome_formats["image_id"](found_image_id)
+                image.set("ID", ome_image_id)
+                metadata_changes.append(
+                    f"Updated attribute 'ID' from '{image_id}' to '{ome_image_id}' "
+                    f"on Image element at position {image_index}."
+                )
+
+        # Fix MicroManager bad instrument refs
+        instrument_ref = image.find(f"{namespace}InstrumentRef")
+        if instrument_ref is not None:
+            instrument_ref_id = instrument_ref.get("ID")
+            if instrument_ref_id == "Microscope":
+                instrument_ref.set("ID", ome_instrument_id)
+
+        # Find all Pixels elements and fix IDs
+        for pixels_index, pixels in enumerate(image.findall(f"{namespace}Pixels")):
+            pixels_id = pixels.get("ID")
+            if pixels_id is not None:
+                found_pixels_id = pixels_id
+
+                if not found_pixels_id.startswith("Pixels"):
+                    pixels.set("ID", f"Pixels:{found_pixels_id}")
+                    metadata_changes.append(
+                        f"Updated attribute 'ID' from '{found_pixels_id}' to "
+                        f"Pixels:{found_pixels_id}' on Pixels element at "
+                        f"position {pixels_index}."
+                    )
+
+            # Determine if there is an out-of-order channel / plane elem
+            # This is due to OMEXML "add channel" function
+            # That added Channels and appropriate Planes to the XML
+            # But, placed them in:
+            # Channel
+            # Plane
+            # Plane
+            # ...
+            # Channel
+            # Plane
+            # Plane
+            #
+            # Instead of grouped together:
+            # Channel
+            # Channel
+            # ...
+            # Plane
+            # Plane
+            # ...
+            #
+            # This effects all CFE files (new and old) but for different reasons
+            pixels_children_out_of_order = False
+            encountered_something_besides_channel = False
+            encountered_plane = False
+            for child in pixels:
+                if child.tag != f"{namespace}Channel":
+                    encountered_something_besides_channel = True
+                if child.tag == f"{namespace}Plane":
+                    encountered_plane = True
+                if (
+                    encountered_something_besides_channel
+                    and child.tag == f"{namespace}Channel"
+                ):
+                    pixels_children_out_of_order = True
+                    break
+                if encountered_plane and child.tag in [
+                    f"{namespace}{t}" for t in ["BinData", "TiffData", "MetadataOnly"]
+                ]:
+                    pixels_children_out_of_order = True
+                    break
+
+            # Ensure order of:
+            # channels -> bindata | tiffdata | metadataonly -> planes
+            if pixels_children_out_of_order:
+                # Get all relevant elems
+                channels = [
+                    copy.deepcopy(c) for c in pixels.findall(f"{namespace}Channel")
+                ]
+                bin_data = [
+                    copy.deepcopy(b) for b in pixels.findall(f"{namespace}BinData")
+                ]
+                tiff_data = [
+                    copy.deepcopy(t) for t in pixels.findall(f"{namespace}TiffData")
+                ]
+                # There should only be one metadata only element but to standardize
+                # list comprehensions later we findall
+                metadata_only = [
+                    copy.deepcopy(m) for m in pixels.findall(f"{namespace}MetadataOnly")
+                ]
+                planes = [copy.deepcopy(p) for p in pixels.findall(f"{namespace}Plane")]
+
+                # Old (2018 ish) cell feature explorer files sometimes contain both
+                # an empty metadata only element and filled tiffdata elements
+                # Since the metadata only elements are empty we can check this and
+                # choose the tiff data elements instead
+                #
+                # First check if there are any metadata only elements
+                if len(metadata_only) == 1:
+                    # Now check if _one of_ of the other two choices are filled
+                    # ^ in Python is XOR
+                    if (len(bin_data) > 0) ^ (len(tiff_data) > 0):
+                        metadata_children = list(metadata_only[0])
+                        # Now check if the metadata only elem has no children
+                        if len(metadata_children) == 0:
+                            # If so, just "purge" by creating empty list
+                            metadata_only = []
+
+                        # If there are children elements
+                        # Return XML and let XMLSchema Validation show error
+                        else:
+                            return xml
+
+                # After cleaning metadata only, validate the normal behaviors of
+                # OME schema
+                #
+                # Validate that there is only one of bindata, tiffdata, or metadata
+                if len(bin_data) > 0:
+                    if len(tiff_data) == 0 and len(metadata_only) == 0:
+                        selected_choice = bin_data
+                    else:
+                        # Return XML and let XMLSchema Validation show error
+                        return xml
+                elif len(tiff_data) > 0:
+                    if len(bin_data) == 0 and len(metadata_only) == 0:
+                        selected_choice = tiff_data
+                    else:
+                        # Return XML and let XMLSchema Validation show error
+                        return xml
+                elif len(metadata_only) == 1:
+                    if len(bin_data) == 0 and len(tiff_data) == 0:
+                        selected_choice = metadata_only
+                    else:
+                        # Return XML and let XMLSchema Validation show error
+                        return xml
+                else:
+                    # Return XML and let XMLSchema Validation show error
+                    return xml
+
+                # Remove all children from element to be replaced
+                # with ordered elements
+                for elem in list(pixels):
+                    pixels.remove(elem)
+
+                # Re-attach elements
+                for channel in channels:
+                    pixels.append(channel)
+                for elem in selected_choice:
+                    pixels.append(elem)
+                for plane in planes:
+                    pixels.append(plane)
+
+                metadata_changes.append(
+                    f"Reordered children of Pixels element at "
+                    f"position {pixels_index}."
+                )
+
+    # This is a result of dumping basically all experiement metadata
+    # into "StructuredAnnotation" blocks
+    #
+    # This affects new (2020) Cell Feature Explorer files
+    #
+    # Because these are structured annotations we don't want to mess with anyones
+    # besides the AICS generated bad structured annotations
+    aics_anno_removed_count = 0
+    sa = root.find(f"{namespace}StructuredAnnotations")
+    if sa is not None:
+        for xml_anno in sa.findall(f"{namespace}XMLAnnotation"):
+            # At least these are namespaced
+            if xml_anno.get("Namespace") == "alleninstitute.org/CZIMetadata":
+                # Get ID because some elements have annotation refs
+                # in both the base Image element and all plane elements
+                aics_anno_id = xml_anno.get("ID")
+                for image in root.findall(f"{namespace}Image"):
+                    for anno_ref in image.findall(f"{namespace}AnnotationRef"):
+                        if anno_ref.get("ID") == aics_anno_id:
+                            image.remove(anno_ref)
+
+                    # Clean planes
+                    if image is not None:
+                        found_image = image
+
+                        pixels_planes: Optional[ET.Element] = found_image.find(
+                            f"{namespace}Pixels"
+                        )
+                        if pixels_planes is not None:
+                            for plane in pixels_planes.findall(f"{namespace}Plane"):
+                                for anno_ref in plane.findall(
+                                    f"{namespace}AnnotationRef"
+                                ):
+                                    if anno_ref.get("ID") == aics_anno_id:
+                                        plane.remove(anno_ref)
+
+                # Remove the whole etree
+                sa.remove(xml_anno)
+                aics_anno_removed_count += 1
+
+    # Log changes
+    if aics_anno_removed_count > 0:
+        metadata_changes.append(
+            f"Removed {aics_anno_removed_count} AICS generated XMLAnnotations."
+        )
+
+    # If there are no annotations in StructuredAnnotations, remove it
+    if sa is not None:
+        if len(list(sa)) == 0:
+            root.remove(sa)
+
+    # If any piece of metadata was changed alert and rewrite
+    if len(metadata_changes) > 0:
+
+        # Register namespace
+        ET.register_namespace("", f"http://{REPLACEMENT_OME_XSD_REFERENCE}")
+
+        # Write out cleaned XML to string
+        xml = ET.tostring(
+            root,
+            encoding="unicode",
+            method="xml",
+        )
+
+    return xml
+
 
 class PythonReader(bfio.base_classes.AbstractReader):
 
     logger = logging.getLogger("bfio.backends.PythonReader")
 
-    _rdr = None
+    _rdr: tifffile.TiffFile = None
 
     def __init__(self, frontend):
         super().__init__(frontend)
 
         self.logger.debug("__init__(): Initializing _rdr (tifffile.TiffFile)...")
         self._rdr = tifffile.TiffFile(self.frontend._file_path)
-        metadata = self.read_metadata()
-        width = metadata.images[0].Pixels.size_x()
-        height = metadata.image[0].Pixels.size_y()
+        self.read_metadata()
+        width = self._metadata.images[0].pixels.size_x
+        height = self._metadata.images[0].pixels.size_y
 
         for tag in self._rdr.pages[0].tags:
             logger.debug(tag)
@@ -79,7 +391,23 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
-        return ome_types.from_xml(self._rdr.ome_metadata)
+
+        if self._metadata is None:
+
+            try:
+                self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
+            except XMLSchemaValidationError:
+                if self.frontend.clean_metadata:
+                    self._metadata = ome_types.from_xml(
+                        clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
+                    )
+                    self.logger.warning(
+                        "read_metadata(): OME XML required reformatting."
+                    )
+                else:
+                    raise
+
+        return self._metadata
 
     def _chunk_indices(self, X, Y, Z):
 
@@ -671,6 +999,7 @@ try:
             JavaReader._classes_loaded = True
 
         def __init__(self, frontend):
+
             if not JavaReader._classes_loaded:
                 self._load_java_classes()
 
@@ -686,9 +1015,26 @@ try:
             self._rdr.setMetadataStore(self.omexml)
             self._rdr.setId(JString(str(self.frontend._file_path.absolute())))
 
-        def read_metadata(self, update=False):
+        def read_metadata(self):
 
-            return ome_types.from_xml(str(self.omexml.dumpXML()))
+            self.logger.debug("read_metadata(): Reading metadata...")
+
+            if self._metadata is None:
+
+                try:
+                    self._metadata = ome_types.from_xml(str(self.omexml.dumpXML()))
+                except XMLSchemaValidationError:
+                    if self.frontend.clean_metadata:
+                        self._metadata = ome_types.from_xml(
+                            clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
+                        )
+                        self.logger.warning(
+                            "read_metadata(): OME XML required reformatting."
+                        )
+                    else:
+                        raise
+
+            return self._metadata
 
         def _read_image(self, X, Y, Z, C, T, output):
 
@@ -900,6 +1246,7 @@ try:
         logger = logging.getLogger("bfio.backends.ZarrReader")
 
         def __init__(self, frontend):
+
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
@@ -911,7 +1258,27 @@ try:
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
             if "metadata" in self._root.attrs.keys():
-                return ome_types.from_xml(self._root.attrs["metadata"])
+
+                if self._metadata is None:
+
+                    try:
+                        self._metadata = ome_types.from_xml(
+                            self._root.attrs["metadata"]
+                        )
+                    except XMLSchemaValidationError:
+                        if self.frontend.clean_metadata:
+                            self._metadata = ome_types.from_xml(
+                                clean_ome_xml_for_known_issues(
+                                    self._root.attrs["metadata"]
+                                )
+                            )
+                            self.logger.warning(
+                                "read_metadata(): OME XML required reformatting."
+                            )
+                        else:
+                            raise
+
+                return self._metadata
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
                 omexml = ome_types.model.OME.construct()

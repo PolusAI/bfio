@@ -82,6 +82,7 @@ class BioReader(BioBase):
         file_path: typing.Union[str, Path],
         max_workers: typing.Union[int, None] = None,
         backend: typing.Optional[str] = None,
+        clean_metadata: bool = True,
     ) -> None:
         """Initialize the BioReader.
 
@@ -92,11 +93,16 @@ class BioReader(BioBase):
             backend: Can be ``python``, ``java``, or ``zarr``. If None, then
                 BioReader will try to autodetect the proper backend.
                 *Default is python.*
+            clean_metadata: Will try to reformat poorly formed OME XML metadata if True.
+                If False, will throw an error if the metadata is poorly formed.
+                *Default is True.*
         """
         # Initialize BioBase
         super(BioReader, self).__init__(
             file_path, max_workers=max_workers, backend=backend
         )
+
+        self.clean_metadata = clean_metadata
 
         # Ensure backend is supported
         if self._backend_name == "python":
