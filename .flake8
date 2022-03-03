@@ -1,0 +1,6 @@
+[flake8]
+docstring-convention=google
+max-line-length=88
+exclude=noxfile.py,docs/*,tests/*,examples/*,.nox/*,build/*,bfio/OmeXml.py,setup.py
+ignore=D105, W503, D100, D104, AZ100
+extend-ignore = E203

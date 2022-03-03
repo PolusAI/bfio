@@ -16,11 +16,9 @@ RUN mkdir ${EXEC_DIR} && \
 
 RUN pip3 install --upgrade pip --no-cache-dir
 
-# Copy the requirements file
-COPY ./requirements/requirements-base.txt ${EXEC_DIR}/
+# Copy the source
+COPY . /bfio_src
 
-# Install bfio and requirements
-RUN pip3 install -r ${EXEC_DIR}/requirements-base.txt --no-cache-dir --no-dependencies && \
-    rm -rf /usr/local/lib/python3.9/site-packages/bfio/jars
-    
-WORKDIR ${EXEC_DIR}
+# Install
+RUN pip3 install /bfio_src[all] --no-cache-dir --no-dependencies && \
+    rm -rf /bfio_src

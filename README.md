@@ -1,11 +1,11 @@
-# **B**io**F**ormats **I**nput/**O**utput utility (bfio v2.1.9)
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.2.0-dev3)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/bfio)
 ![Bower](https://img.shields.io/bower/l/MI)
 
-This tool is a simplified but powerful interface to 
+This tool is a simplified but powerful interface to
 [Bioformats](https://www.openmicroscopy.org/bio-formats/)
 using jpype for direct access to the library. This tool is designed with
 scalable image analysis in mind, with a simple interface to treat any image
@@ -16,14 +16,14 @@ Docker containers with all necessary components are available (see
 
 ## Summary
 
-  - [Installation](#installation)
-  - [Docker](#docker)
-  - [Documentation](#documentation)
-  - [Contributing](#contributing)
-  - [Versioning](#versioning)
-  - [Authors](#authors)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
+- [Installation](#installation)
+- [Docker](#docker)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Versioning](#versioning)
+- [Authors](#authors)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
 
 ## Installation
 
@@ -53,15 +53,15 @@ Additionally, `bfio` with other dependencies can be installed:
 
 ## Docker
 
-### labshare/polus-bfio-util:2.1.8
+### labshare/polus-bfio-util:2.2.0-dev3
 
 Ubuntu based container with bfio and all dependencies (including Java).
 
-### labshare/polus-bfio-util:2.1.8-imagej
+### labshare/polus-bfio-util:2.2.0-dev3-imagej
 
 Same as above, except comes with ImageJ and PyImageJ.
 
-### labshare/polus-bfio-util:2.1.8-tensorflow
+### labshare/polus-bfio-util:2.2.0-dev3-tensorflow
 
 Tensorflow container with bfio isntalled.
 
@@ -88,5 +88,5 @@ details
 
 ## Acknowledgments
 
-  - Parts of this code were written/modified from existing code found in
+- Parts of this code were written/modified from existing code found in
     `tifffile`.
