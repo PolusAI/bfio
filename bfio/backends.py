@@ -37,7 +37,6 @@ ome_formats = {
     "detector_id": lambda x: f"Detector:{x}",
     "instrument_id": lambda x: f"Instrument:{x}",
     "image_id": lambda x: f"Image:{x}",
-    "instrument_id": lambda x: f"Instrument:{x}",
 }
 
 
