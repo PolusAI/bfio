@@ -1,4 +1,4 @@
-# **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.2.0-dev3)
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.2.0)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
@@ -53,15 +53,15 @@ Additionally, `bfio` with other dependencies can be installed:
 
 ## Docker
 
-### labshare/polus-bfio-util:2.2.0-dev3
+### labshare/polus-bfio-util:2.2.0
 
 Ubuntu based container with bfio and all dependencies (including Java).
 
-### labshare/polus-bfio-util:2.2.0-dev3-imagej
+### labshare/polus-bfio-util:2.2.0-imagej
 
 Same as above, except comes with ImageJ and PyImageJ.
 
-### labshare/polus-bfio-util:2.2.0-dev3-tensorflow
+### labshare/polus-bfio-util:2.2.0-tensorflow
 
 Tensorflow container with bfio isntalled.
 
