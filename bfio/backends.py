@@ -1072,6 +1072,9 @@ try:
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
+                                print(
+                                    f"dimension order: {self._rdr.getDimensionOrder()}"
+                                )
                                 if self.frontend.spp > 1:
                                     image = image.reshape(
                                         self.frontend.c, y_range, x_range
