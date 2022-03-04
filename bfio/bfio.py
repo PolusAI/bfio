@@ -105,6 +105,7 @@ class BioReader(BioBase):
         self.clean_metadata = clean_metadata
 
         # Ensure backend is supported
+        self.logger.debug("Staring the backend...")
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
         elif self._backend_name == "java":
@@ -120,6 +121,7 @@ class BioReader(BioBase):
                 )
         else:
             raise ValueError('backend must be "python", "java", or "zarr"')
+        self.logger.debug("Finished initializing the backend.")
 
         # Preload the metadata
         self._metadata = self._backend.read_metadata()
