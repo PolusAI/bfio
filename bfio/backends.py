@@ -15,6 +15,7 @@ import ome_types
 import re
 from tifffile import tifffile
 from xmlschema.validators.exceptions import XMLSchemaValidationError
+from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -395,11 +396,17 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
 
             try:
-                self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
-            except XMLSchemaValidationError:
+                # self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
+                self._metadata = ome_types.from_xml(
+                    self._rdr.ome_metadata,
+                    validate=True,
+                )
+            except (XMLSchemaValidationError, XMLSchemaValidateError):
                 if self.frontend.clean_metadata:
+                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
-                        clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
+                        cleaned,
+                        validate=True,
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -504,6 +511,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
     def __init__(self, frontend):
         super().__init__(frontend)
 
+        with open("dump.xml", "w") as fw:
+            fw.write(frontend.metadata.json(indent=2))
+
         if self.frontend.C > 1:
             self.logger.warning(
                 "The BioWriter only writes single channel "
@@ -518,6 +528,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 + "Setting the number of timepoints to 1."
             )
             self.frontend.T = 1
+
+        with open("dump1.xml", "w") as fw:
+            fw.write(frontend.metadata.json(indent=2))
 
     def _pack(self, fmt, *val):
         return struct.pack(self._byteorder + fmt, *val)
@@ -607,7 +620,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._tags = []
 
-        self.frontend._metadata.image[0].id(Path(self.frontend._file_path).name)
+        self.frontend._metadata.images[
+            0
+        ].id = f"Image:{Path(self.frontend._file_path).name}"
 
         if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True
@@ -648,19 +663,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             f = f.limit_denominator(max_denominator)
             return f.numerator, f.denominator
 
-        description = "".join(
-            [
-                '<?xml version="1.0" encoding="UTF-8"?>',
-                "<!-- Warning: this comment is an OME-XML metadata block, ",
-                "which contains crucial dimensional parameters and other",
-                "important metadata. Please edit cautiously (if at all), ",
-                "and back up the original data before doing so. For more ",
-                "information, see the OME-TIFF web site: ",
-                "https://docs.openmicroscopy.org/latest/ome-model/ome-tiff/. -->",
-                ome_types.to_xml(self.frontend._metadata),
-                # str(self.frontend._metadata).replace("ome:", "").replace(":ome", ""),
-            ]
-        )
+        description = ome_types.to_xml(self.frontend._metadata)
 
         self._addtag(270, "s", 0, description, writeonce=True)  # Description
         self._addtag(305, "s", 0, f"bfio v{bfio.__version__}")  # Software
@@ -1044,13 +1047,7 @@ try:
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
 
-                        # TODO: This should be changed in the future
-                        # See the comment below about properly handling
-                        # interleaved channel data.
-                        if self.frontend.spp > 1:
-                            index = self._rdr.getIndex(z, 0, t)
-                        else:
-                            index = self._rdr.getIndex(z, c, t)
+                        index = self._rdr.getIndex(z, c // self.frontend.spp, t)
 
                         x_max = min([X[1], self.frontend.X])
                         for x in range(X[0], x_max, self._chunk_size):
@@ -1064,7 +1061,8 @@ try:
                                     index, x, y, x_range, y_range
                                 )
                                 image = numpy.frombuffer(
-                                    bytes(image), self.frontend.dtype
+                                    bytes(image),
+                                    self.frontend.dtype,
                                 )
 
                                 # TODO: This should be changed in the future
@@ -1072,11 +1070,14 @@ try:
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
-                                if self.frontend.spp > 1:
+                                if self._rdr.getFormat() not in ["Zeiss CZI"]:
                                     image = image.reshape(
-                                        self.frontend.c, y_range, x_range
-                                    )
-                                    image = image[c, ...].squeeze()
+                                        self.frontend.spp, y_range, x_range
+                                    )[c % self.frontend.spp, ...]
+                                else:
+                                    image = image.reshape(
+                                        y_range, x_range, self.frontend.spp
+                                    )[..., c % self.frontend.spp]
 
                                 out[
                                     y - Y[0] : y + y_range - Y[0],
@@ -1084,7 +1085,7 @@ try:
                                     zi,
                                     ci,
                                     ti,
-                                ] = image.reshape(y_range, x_range)
+                                ] = image
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr is not None:

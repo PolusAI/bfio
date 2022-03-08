@@ -279,25 +279,15 @@ class BioBase(object, metaclass=abc.ABCMeta):
         )
         self._DIMS[dimension.upper()] = value
         if dimension.upper() == "C":
-            self._metadata.images[0].pixels.channels = [
-                ome_types.model.Channel.construct() for _ in range(value)
-            ]
-        self._metadata.image[0].pixels.tiff_data_blocks = [
-            ome_types.model.TiffData.construct() for _ in range(value)
-        ]
-
-        count = 0
-        for z in range(self.Z):
-            for c in range(self.C):
-                for t in range(self.T):
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_z = z
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_c = c
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_t = t
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].ifd = count
-                    self._metadata.images[0].pixels.tiff_data_blocks[
-                        count
-                    ].plane_count = 1
-                    count += 1
+            if len(self._metadata.images[0].pixels.channels) > value:
+                self._metadata.images[0].pixels.channels = self._metadata.images[
+                    0
+                ].pixels.channels[:value]
+            else:
+                for i in range(len(self._metadata.images[0].pixels.channels), value):
+                    self._metadata.images[0].pixels.channels.append(
+                        ome_types.model.Channel()
+                    )
 
     """ ------------------------------ """
     """ -Get/Set Dimension Properties- """
