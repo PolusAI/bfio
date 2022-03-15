@@ -38,6 +38,7 @@ setup(
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
         "ome-types>=0.2.10",
+        "lxml",  # remove this when upgrading to the next version of ome-types
     ],
     extras_require={
         "jpype": ["jpype1>=1.2.1"],
