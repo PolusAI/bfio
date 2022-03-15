@@ -821,11 +821,11 @@ class BioWriter(BioBase):
         if metadata:
             assert metadata.__class__.__name__ == "OME"
             self._metadata = ome_types.from_xml(ome_types.to_xml(metadata))
-            self._metadata.images[0].Name = self._file_path.name
-            self._metadata.images[0].Pixels.channel_count = self.C
-            self._metadata.image[
+
+            self._metadata.images[0].name = self._file_path.name
+            self._metadata.images[
                 0
-            ].Pixels.DimensionOrder = ome_types.model.Pixels.dimension_order.XYZCT
+            ].pixels.dimension_order = ome_types.model.pixels.DimensionOrder.XYZCT
         else:
             self._metadata = self._minimal_xml()
 
@@ -857,15 +857,15 @@ class BioWriter(BioBase):
         ) and not self._file_path.name.endswith(".ome.tif"):
             ValueError("The file extension must be .ome.tif or .ome.zarr")
 
-        if self.metadata.image_count > 1:
+        if len(self.metadata.images) > 1:
             self.logger.warning(
                 "The BioWriter only writes single image "
                 + "files, but the metadata has {} images. ".format(
-                    self.metadata.image_count
+                    len(self.metadata.images)
                 )
                 + "Setting the number of images to 1."
             )
-            self.metadata.image_count = 1
+            self.metadata.images = self.metadata.images[:1]
 
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}

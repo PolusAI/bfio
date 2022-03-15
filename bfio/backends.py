@@ -15,6 +15,7 @@ import ome_types
 import re
 from tifffile import tifffile
 from xmlschema.validators.exceptions import XMLSchemaValidationError
+from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -395,11 +396,21 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
 
             try:
-                self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
-            except XMLSchemaValidationError:
+                # self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
+                self._metadata = ome_types.from_xml(
+                    self._rdr.ome_metadata,
+                    # Uncomment this when ome_types releases a new version
+                    # https://github.com/tlambert03/ome-types/pull/127
+                    # validate=True,
+                )
+            except (XMLSchemaValidationError, XMLSchemaValidateError):
                 if self.frontend.clean_metadata:
+                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
-                        clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
+                        cleaned,
+                        # Uncomment this when ome_types releases a new version
+                        # https://github.com/tlambert03/ome-types/pull/127
+                        # validate=True,
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -607,7 +618,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._tags = []
 
-        self.frontend._metadata.image[0].id(Path(self.frontend._file_path).name)
+        self.frontend._metadata.images[
+            0
+        ].id = f"Image:{Path(self.frontend._file_path).name}"
 
         if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True
@@ -648,19 +661,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             f = f.limit_denominator(max_denominator)
             return f.numerator, f.denominator
 
-        description = "".join(
-            [
-                '<?xml version="1.0" encoding="UTF-8"?>',
-                "<!-- Warning: this comment is an OME-XML metadata block, ",
-                "which contains crucial dimensional parameters and other",
-                "important metadata. Please edit cautiously (if at all), ",
-                "and back up the original data before doing so. For more ",
-                "information, see the OME-TIFF web site: ",
-                "https://docs.openmicroscopy.org/latest/ome-model/ome-tiff/. -->",
-                ome_types.to_xml(self.frontend._metadata),
-                # str(self.frontend._metadata).replace("ome:", "").replace(":ome", ""),
-            ]
-        )
+        description = ome_types.to_xml(self.frontend._metadata)
 
         self._addtag(270, "s", 0, description, writeonce=True)  # Description
         self._addtag(305, "s", 0, f"bfio v{bfio.__version__}")  # Software
@@ -1127,9 +1128,32 @@ try:
 
             super().__init__(frontend)
 
+            # Force data to use XYZCT ordering
+            self.frontend.metadata.images[0].pixels.dimension_order = "XYZCT"
+
+            # Expand interleaved RGB to separate image planes for each channel
+            image = self.frontend.metadata.images[0]
+
+            pseudo_interleaved = any(
+                channel.samples_per_pixel > 1 for channel in image.pixels.channels
+            )
+
+            if image.pixels.interleaved or pseudo_interleaved:
+
+                image.pixels.interleaved = False
+
+                for _ in range(len(image.pixels.channels)):
+
+                    channel = image.pixels.channels.pop(0)
+                    expand_channels = channel.samples_per_pixel
+                    channel.samples_per_pixel = 1
+
+                    for _ in range(expand_channels):
+                        image.pixels.channels.append(channel)
+
             # Test to see if the loci_tools.jar is present
             if bfio.JARS is None:
-                raise FileNotFoundError("The loci_tools.jar could not be found.")
+                raise FileNotFoundError("The bioformats.jar could not be found.")
 
         def _init_writer(self):
             """_init_writer Initializes file writing.
@@ -1153,22 +1177,18 @@ try:
             # Set the metadata
             service = ServiceFactory().getInstance(OMEXMLService)
             xml = ome_types.to_xml(self.frontend.metadata)
-            # xml = (
-            #     str(self.frontend.metadata)
-            #     .replace("<ome:", "<")
-            #     .replace("</ome:", "</")
-            # )
             metadata = service.createOMEXMLMetadata(xml)
             writer.setMetadataRetrieve(metadata)
 
             # Set the file path
             writer.setId(str(self.frontend._file_path))
 
-            # We only save a single channel, so interleaved is unecessary
-            writer.setInterleaved(False)
-
             # Set compression to
             writer.setCompression(CompressionType.ZLIB.getCompression())
+
+            # Set image tiles
+            writer.setTileSizeX(1024)
+            writer.setTileSizeY(1024)
 
             self._writer = writer
 
@@ -1178,6 +1198,10 @@ try:
 
             X, Y, Z, C, T = dims
 
+            index = (
+                Z[0] + self.frontend.z * C[0] + self.frontend.z * self.frontend.c * T[0]
+            )
+
             x_range = min([self.frontend.X, X[1] + 1024]) - X[1]
             y_range = min([self.frontend.Y, Y[1] + 1024]) - Y[1]
 
@@ -1185,7 +1209,8 @@ try:
             pixel_buffer = out[
                 Y[0] : Y[0] + y_range, X[0] : X[0] + x_range, Z[0], C[0], T[0]
             ].tobytes()
-            self._writer.saveBytes(Z[1], pixel_buffer, X[1], Y[1], x_range, y_range)
+
+            self._writer.saveBytes(index, pixel_buffer, X[1], Y[1], x_range, y_range)
 
         def _write_image(self, X, Y, Z, C, T, image):
 
@@ -1206,6 +1231,7 @@ try:
                 with ThreadPoolExecutor(self.frontend.max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
             else:
+
                 for args in self._tile_indices:
                     self._process_chunk(args)
 
@@ -1262,12 +1288,18 @@ try:
                     try:
                         self._metadata = ome_types.from_xml(
                             self._root.attrs["metadata"]
+                            # Uncomment this when ome_types releases a new version
+                            # https://github.com/tlambert03/ome-types/pull/127
+                            # validate=True,
                         )
                     except XMLSchemaValidationError:
                         if self.frontend.clean_metadata:
                             self._metadata = ome_types.from_xml(
                                 clean_ome_xml_for_known_issues(
                                     self._root.attrs["metadata"]
+                                    # Uncomment when ome_types releases a new version
+                                    # https://github.com/tlambert03/ome-types/pull/127
+                                    # validate=True,
                                 )
                             )
                             self.logger.warning(
