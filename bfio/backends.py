@@ -399,14 +399,18 @@ class PythonReader(bfio.base_classes.AbstractReader):
                 # self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
                 self._metadata = ome_types.from_xml(
                     self._rdr.ome_metadata,
-                    validate=True,
+                    # Uncomment this when ome_types releases a new version
+                    # https://github.com/tlambert03/ome-types/pull/127
+                    # validate=True,
                 )
             except (XMLSchemaValidationError, XMLSchemaValidateError):
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
                         cleaned,
-                        validate=True,
+                        # Uncomment this when ome_types releases a new version
+                        # https://github.com/tlambert03/ome-types/pull/127
+                        # validate=True,
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -511,9 +515,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
     def __init__(self, frontend):
         super().__init__(frontend)
 
-        with open("dump.xml", "w") as fw:
-            fw.write(frontend.metadata.json(indent=2))
-
         if self.frontend.C > 1:
             self.logger.warning(
                 "The BioWriter only writes single channel "
@@ -528,9 +529,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 + "Setting the number of timepoints to 1."
             )
             self.frontend.T = 1
-
-        with open("dump1.xml", "w") as fw:
-            fw.write(frontend.metadata.json(indent=2))
 
     def _pack(self, fmt, *val):
         return struct.pack(self._byteorder + fmt, *val)
@@ -1290,12 +1288,18 @@ try:
                     try:
                         self._metadata = ome_types.from_xml(
                             self._root.attrs["metadata"]
+                            # Uncomment this when ome_types releases a new version
+                            # https://github.com/tlambert03/ome-types/pull/127
+                            # validate=True,
                         )
                     except XMLSchemaValidationError:
                         if self.frontend.clean_metadata:
                             self._metadata = ome_types.from_xml(
                                 clean_ome_xml_for_known_issues(
                                     self._root.attrs["metadata"]
+                                    # Uncomment when ome_types releases a new version
+                                    # https://github.com/tlambert03/ome-types/pull/127
+                                    # validate=True,
                                 )
                             )
                             self.logger.warning(
