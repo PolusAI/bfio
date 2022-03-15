@@ -1130,9 +1130,32 @@ try:
 
             super().__init__(frontend)
 
+            # Force data to use XYZCT ordering
+            self.frontend.metadata.images[0].pixels.dimension_order = "XYZCT"
+
+            # Expand interleaved RGB to separate image planes for each channel
+            image = self.frontend.metadata.images[0]
+
+            pseudo_interleaved = any(
+                channel.samples_per_pixel > 1 for channel in image.pixels.channels
+            )
+
+            if image.pixels.interleaved or pseudo_interleaved:
+
+                image.pixels.interleaved = False
+
+                for _ in range(len(image.pixels.channels)):
+
+                    channel = image.pixels.channels.pop(0)
+                    expand_channels = channel.samples_per_pixel
+                    channel.samples_per_pixel = 1
+
+                    for _ in range(expand_channels):
+                        image.pixels.channels.append(channel)
+
             # Test to see if the loci_tools.jar is present
             if bfio.JARS is None:
-                raise FileNotFoundError("The loci_tools.jar could not be found.")
+                raise FileNotFoundError("The bioformats.jar could not be found.")
 
         def _init_writer(self):
             """_init_writer Initializes file writing.
@@ -1156,22 +1179,18 @@ try:
             # Set the metadata
             service = ServiceFactory().getInstance(OMEXMLService)
             xml = ome_types.to_xml(self.frontend.metadata)
-            # xml = (
-            #     str(self.frontend.metadata)
-            #     .replace("<ome:", "<")
-            #     .replace("</ome:", "</")
-            # )
             metadata = service.createOMEXMLMetadata(xml)
             writer.setMetadataRetrieve(metadata)
 
             # Set the file path
             writer.setId(str(self.frontend._file_path))
 
-            # We only save a single channel, so interleaved is unecessary
-            writer.setInterleaved(False)
-
             # Set compression to
             writer.setCompression(CompressionType.ZLIB.getCompression())
+
+            # Set image tiles
+            writer.setTileSizeX(1024)
+            writer.setTileSizeY(1024)
 
             self._writer = writer
 
@@ -1181,6 +1200,10 @@ try:
 
             X, Y, Z, C, T = dims
 
+            index = (
+                Z[0] + self.frontend.z * C[0] + self.frontend.z * self.frontend.c * T[0]
+            )
+
             x_range = min([self.frontend.X, X[1] + 1024]) - X[1]
             y_range = min([self.frontend.Y, Y[1] + 1024]) - Y[1]
 
@@ -1188,7 +1211,8 @@ try:
             pixel_buffer = out[
                 Y[0] : Y[0] + y_range, X[0] : X[0] + x_range, Z[0], C[0], T[0]
             ].tobytes()
-            self._writer.saveBytes(Z[1], pixel_buffer, X[1], Y[1], x_range, y_range)
+
+            self._writer.saveBytes(index, pixel_buffer, X[1], Y[1], x_range, y_range)
 
         def _write_image(self, X, Y, Z, C, T, image):
 
@@ -1209,6 +1233,7 @@ try:
                 with ThreadPoolExecutor(self.frontend.max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
             else:
+
                 for args in self._tile_indices:
                     self._process_chunk(args)
 

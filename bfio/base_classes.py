@@ -127,11 +127,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
         self._backend_name = backend.lower()
 
         # Set the number of workers for multi-threaded loading
-        if self._backend_name == "java" and max_workers is not None:
-            self.logger.warning(
-                "The max_workers keyword was present, but the java backend only "
-                + "operates with a single worker. Setting max_workers=1."
-            )
+        if self._backend_name == "java":
+            if max_workers is not None:
+                self.logger.warning(
+                    "The max_workers keyword was present, but the java backend only "
+                    + "operates with a single worker. Setting max_workers=1."
+                )
             self.max_workers = 1
         else:
             self.max_workers = (
