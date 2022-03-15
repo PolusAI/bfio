@@ -1044,13 +1044,7 @@ try:
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
 
-                        # TODO: This should be changed in the future
-                        # See the comment below about properly handling
-                        # interleaved channel data.
-                        if self.frontend.spp > 1:
-                            index = self._rdr.getIndex(z, 0, t)
-                        else:
-                            index = self._rdr.getIndex(z, c, t)
+                        index = self._rdr.getIndex(z, c // self.frontend.spp, t)
 
                         x_max = min([X[1], self.frontend.X])
                         for x in range(X[0], x_max, self._chunk_size):
@@ -1064,7 +1058,8 @@ try:
                                     index, x, y, x_range, y_range
                                 )
                                 image = numpy.frombuffer(
-                                    bytes(image), self.frontend.dtype
+                                    bytes(image),
+                                    self.frontend.dtype,
                                 )
 
                                 # TODO: This should be changed in the future
@@ -1072,11 +1067,14 @@ try:
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
-                                if self.frontend.spp > 1:
+                                if self._rdr.getFormat() not in ["Zeiss CZI"]:
                                     image = image.reshape(
-                                        self.frontend.c, y_range, x_range
-                                    )
-                                    image = image[c, ...].squeeze()
+                                        self.frontend.spp, y_range, x_range
+                                    )[c % self.frontend.spp, ...]
+                                else:
+                                    image = image.reshape(
+                                        y_range, x_range, self.frontend.spp
+                                    )[..., c % self.frontend.spp]
 
                                 out[
                                     y - Y[0] : y + y_range - Y[0],
@@ -1084,7 +1082,7 @@ try:
                                     zi,
                                     ci,
                                     ti,
-                                ] = image.reshape(y_range, x_range)
+                                ] = image
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr is not None:

@@ -8,6 +8,7 @@ TEST_IMAGES = {
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
     "img_r001_c001.ome.tif": "https://github.com/usnistgov/WIPP/raw/master/data/PyramidBuilding/inputCollection/img_r001_c001.ome.tif",
+    "Leica-1.scn": "https://downloads.openmicroscopy.org/images/Leica-SCN/openslide/Leica-1/Leica-1.scn",
 }
 
 TEST_DIR = pathlib.Path(__file__).with_name("data")
