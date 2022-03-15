@@ -53,20 +53,6 @@ Additionally, `bfio` with other dependencies can be installed:
 
 ## Docker
 
-<<<<<<< HEAD
-
-### labshare/polus-bfio-util:2.2.0-dev3
-
-Ubuntu based container with bfio and all dependencies (including Java).
-
-### labshare/polus-bfio-util:2.2.0-dev3-imagej
-
-Same as above, except comes with ImageJ and PyImageJ.
-
-### labshare/polus-bfio-util:2.2.0-dev3-tensorflow
-
-=======
-
 ### labshare/polus-bfio-util:2.2.0
 
 Ubuntu based container with bfio and all dependencies (including Java).
@@ -76,8 +62,6 @@ Ubuntu based container with bfio and all dependencies (including Java).
 Same as above, except comes with ImageJ and PyImageJ.
 
 ### labshare/polus-bfio-util:2.2.0-tensorflow
-
->>>>>>> 1999ba84f98962a57eef250dba4934af8a56e1b1
 
 Tensorflow container with bfio isntalled.
 
