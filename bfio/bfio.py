@@ -178,6 +178,7 @@ class BioReader(BioBase):
 
         return self.read(**ind)
 
+    # @profile
     def read(
         self,
         X: typing.Union[list, tuple, None] = None,
@@ -226,15 +227,65 @@ class BioReader(BioBase):
         Y_tile_shape = Y_tile_end - Y_tile_start
         Z_tile_shape = Z[1] - Z[0]
 
-        # Initialize the output
-        output = numpy.zeros(
-            [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)], dtype=self.dtype
-        )
+        # Determine if enough planes will be loaded to benefit from tiling
+        # There is a tradeoff between fast storing tiles and reshaping later versus
+        # slow storing tiles without reshaping.
+        # fast storing tiles is aligned memory, where slow storing is unaligned
+        load_tiles = 10 * (
+            X_tile_shape * Y_tile_shape / 1024**2 + 1
+        ) < Z_tile_shape * len(C) * len(T)
+
+        # Initialize the output for zarr and java
+        if self._backend_name != "python":
+            output = numpy.zeros(
+                [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)],
+                dtype=self.dtype,
+            )
+
+        # Initialize the output for python
+        # We use a different matrix shape for loading images to reduce memory copy time
+        # TODO: Should use this same scheme for the other readers to reduce copy times
+        else:
+            if load_tiles:
+                y_tile = min(Y[1] - Y[0], 1024)
+                x_tile = min(X[1] - X[0], 1024)
+                output = numpy.zeros(
+                    [
+                        Z_tile_shape,
+                        len(C),
+                        len(T),
+                        Y_tile_shape // 1024,
+                        X_tile_shape // 1024,
+                        y_tile,
+                        x_tile,
+                    ],
+                    dtype=self.dtype,
+                    order="C",
+                )
+            else:
+                output = numpy.zeros(
+                    [Z_tile_shape, len(C), len(T), Y[1] - Y[0], X[1] - X[0]],
+                    dtype=self.dtype,
+                    order="C",
+                )
 
         # Read the image
+        self._backend.load_tiles = load_tiles
         self._backend.read_image(
             [X_tile_start, X_tile_end], [Y_tile_start, Y_tile_end], Z, C, T, output
         )
+
+        # Reshape the arrays into expected format
+        if self._backend_name == "python":
+            if load_tiles:
+                output = output.transpose(3, 5, 4, 6, 0, 1, 2)
+                X_tile_shape = X_tile_shape if x_tile == 1024 else X[1] - X[0]
+                Y_tile_shape = Y_tile_shape if y_tile == 1024 else Y[1] - Y[0]
+                output = output.reshape(
+                    Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
+                )
+            else:
+                output = output.transpose(3, 4, 0, 1, 2)
 
         output = output[
             Y[0] - Y_tile_start : Y[1] - Y_tile_start,
@@ -927,7 +978,7 @@ class BioWriter(BioBase):
                     raise IndexError(
                         "Shape of image {} does not match the ".format(value.shape)
                         + "save dimensions {}.".format(
-                            (s[1] - s[0] for s in ind.values())
+                            list(s[1] - s[0] for s in ind.values())
                         )
                     )
             elif d in "YXZ" and ind[d][1] - ind[d][0] != value.shape[i]:
@@ -955,7 +1006,7 @@ class BioWriter(BioBase):
             not self._read_only
         ), "The image has started to be written. To modify the xml again, reinitialize."
         omexml = ome_types.model.OME.construct()
-        omexml.image[0].name = Path(self._file_path).name
+        omexml.images[0].name = Path(self._file_path).name
         p = omexml.image[0].pixels
 
         assert isinstance(p, ome_types.model.Pixels)

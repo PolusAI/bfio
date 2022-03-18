@@ -502,7 +502,10 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def dtype(self) -> numpy.dtype:
         """The numpy pixel type of the data."""
-        return self._DTYPE[self._metadata.images[0].pixels.type.value]
+        dtype = numpy.dtype(self._DTYPE[self._metadata.images[0].pixels.type.value])
+        return dtype.newbyteorder(
+            ">" if self.metadata.images[0].pixels.big_endian else "<"
+        )
 
     @dtype.setter
     def dtype(self, dtype):
@@ -747,6 +750,7 @@ class AbstractReader(AbstractBackend):
         """
         pass
 
+    # @profile
     def read_image(self, *args):
         """Abstract read image executor.
 
