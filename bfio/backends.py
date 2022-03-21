@@ -6,7 +6,8 @@ import shutil
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
+import threading
 
 # Third party packages
 import imagecodecs
@@ -343,13 +344,20 @@ class PythonReader(bfio.base_classes.AbstractReader):
     logger = logging.getLogger("bfio.backends.PythonReader")
 
     _rdr: tifffile.TiffFile = None
+    _offsets_bytes = None
+    _STATE_DICT = ["_metadata", "frontend"]
 
     def __init__(self, frontend):
         super().__init__(frontend)
 
         self.logger.debug("__init__(): Initializing _rdr (tifffile.TiffFile)...")
         self._rdr = tifffile.TiffFile(self.frontend._file_path)
-        self.read_metadata()
+        if self._rdr.ome_metadata is None:
+            raise TypeError(
+                "No OME metadata detected, use the java backend to read this file."
+            )
+        else:
+            self.read_metadata()
         width = self._metadata.images[0].pixels.size_x
         height = self._metadata.images[0].pixels.size_y
 
@@ -389,6 +397,36 @@ class PythonReader(bfio.base_classes.AbstractReader):
                     )
                     + "backend to read this image."
                 )
+        elif self._metadata.images[0].pixels.dimension_order.value != "XYZCT":
+            raise TypeError(
+                "The dimension order of the data is not XYZCT. "
+                + "Use the java backend to read this image."
+            )
+        elif self._metadata.images[0].pixels.interleaved:
+            raise TypeError(
+                "The data is RGB interleaved and cannot be read by the PythonReader. "
+                + "Use the java backend to read this image."
+            )
+
+        # Close the reader until we need it
+        self._rdr.filehandle.close()
+
+    def __getstate__(self) -> Dict:
+
+        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+        state_dict.update({"file_path": self.frontend._file_path})
+
+        return state_dict
+
+    def __setstate__(self, state) -> None:
+
+        for k, v in state.items():
+            if k == "file_path":
+                self._lock = threading.Lock()
+                self._rdr = tifffile.TiffFile(v)
+                self._rdr.filehandle.close()
+            else:
+                setattr(self, k, v)
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
@@ -396,7 +434,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
 
             try:
-                # self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
                 self._metadata = ome_types.from_xml(
                     self._rdr.ome_metadata,
                     # Uncomment this when ome_types releases a new version
@@ -420,12 +457,88 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         return self._metadata
 
-    def _chunk_indices(self, X, Y, Z):
+    class _TiffBytesOffsets(tifffile.TiffFrame):
+        def __init__(self, parent, index):
 
-        self.logger.debug("_chunk_indices(): (X,Y,Z) -> ({},{},{})".format(X, Y, Z))
-        assert len(X) == 2
-        assert len(Y) == 2
-        assert len(Z) == 2
+            self.index = index
+
+            self.parent = parent
+
+            self.dataoffsets = ()
+            self.databytecounts = ()
+
+            fh = self.parent.filehandle
+            self.offset = fh.tell()
+            for code, tag in self._gettags({324, 325}):
+                if code == 324:
+                    self.dataoffsets = tag.value
+                elif code == 325:
+                    self.databytecounts = tag.value
+
+            # get the next offset
+            tiff = self.parent.tiff
+            fh.seek(self.offset)
+            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
+            fh.seek(self.offset + tiff.tagnosize + tagno * tiff.tagsize)
+            self.next_offset = struct.unpack(
+                tiff.offsetformat, fh.read(tiff.offsetsize)
+            )[0]
+
+        def _gettags(self, codes={324, 325}):
+            """Return list of (code, TiffTag) from file."""
+            fh = self.parent.filehandle
+            tiff = self.parent.tiff
+            unpack = struct.unpack
+            tags = []
+
+            tagno = unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
+
+            tagoffset = self.offset + tiff.tagnosize  # fh.tell()
+            tagsize = tiff.tagsize
+            codeformat = tiff.tagformat1[:2]
+            tagbytes = fh.read(tagsize * tagno)
+
+            have_one_tag = False
+            for tagindex in reversed(range(0, tagno * tagsize, tagsize)):
+                code = unpack(codeformat, tagbytes[tagindex : tagindex + 2])[0]
+                if code not in codes:
+                    continue
+                tag = tifffile.TiffTag.fromfile(
+                    self.parent,
+                    tagoffset + tagindex,
+                    tagbytes[tagindex : tagindex + tagsize],
+                )
+                tags.append((code, tag))
+                if have_one_tag:
+                    break
+                else:
+                    have_one_tag = True
+
+            return tags
+
+    def _page_offsets_bytes(self, index: int):
+
+        if index == 0:
+
+            return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
+
+        parent = self._rdr
+
+        if self._offsets_bytes is None or self._offsets_bytes.index + 1 != index:
+            self._rdr.pages._seek(int(index))
+        else:
+            self._rdr.filehandle.seek(self._offsets_bytes.next_offset)
+
+        obc = self._TiffBytesOffsets(parent, index)
+        self._offsets_bytes = obc
+
+        return obc.dataoffsets, obc.databytecounts
+
+    def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
+
+        self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
+        assert all(len(D) == 2 for D in [X, Y, Z])
+        assert all(isinstance(D, list) for D in [C, T])
 
         offsets = []
         bytecounts = []
@@ -435,22 +548,23 @@ class PythonReader(bfio.base_classes.AbstractReader):
         x_tiles = numpy.arange(X[0] // ts, numpy.ceil(X[1] / ts), dtype=int)
         y_tile_stride = numpy.ceil(self.frontend.x / ts).astype(int)
 
-        self.logger.debug("_chunk_indices(): x_tiles = {}".format(x_tiles))
-        self.logger.debug("_chunk_indices(): y_tile_stride = {}".format(y_tile_stride))
+        for t in T:
+            t_index = self.frontend.Z * self.frontend.C * t
+            for c in C:
+                c_index = t_index + self.frontend.Z * c
+                for z in range(Z[0], Z[1]):
+                    index = z + c_index
 
-        for z in range(Z[0], Z[1]):
-            for y in range(Y[0] // ts, int(numpy.ceil(Y[1] / ts))):
-                y_offset = int(y * y_tile_stride)
-                ind = (x_tiles + y_offset).tolist()
+                    dataoffsets, databytecounts = self._page_offsets_bytes(index)
+                    for y in range(Y[0] // ts, int(numpy.ceil(Y[1] / ts))):
+                        y_offset = int(y * y_tile_stride)
+                        ind = (x_tiles + y_offset).tolist()
 
-                o = [self._rdr.pages[z].dataoffsets[i] for i in ind]
-                b = [self._rdr.pages[z].databytecounts[i] for i in ind]
+                        o = [dataoffsets[i] for i in ind]
+                        b = [databytecounts[i] for i in ind]
 
-                self.logger.debug("_chunk_indices(): offsets = {}".format(o))
-                self.logger.debug("_chunk_indices(): bytecounts = {}".format(b))
-
-                offsets.extend(o)
-                bytecounts.extend(b)
+                        offsets.extend(o)
+                        bytecounts.extend(b)
 
         return offsets, bytecounts
 
@@ -459,7 +573,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
         keyframe = self._keyframe
         out = self._image
 
-        w, l, d, _, _ = self._tile_indices[args[1]]
+        w, l, d, c, t = self._tile_indices[args[1]]
 
         # copy decoded segments to output array
         segment, _, shape = keyframe.decode(*args)
@@ -472,35 +586,56 @@ class PythonReader(bfio.base_classes.AbstractReader):
             "_process_chunk(): (w,l,d) = {},{},{}".format(w[0], l[0], d[0])
         )
 
-        out[
-            l[0] : l[0] + shape[1], w[0] : w[0] + shape[2], d[0], 0, 0
-        ] = segment.squeeze()
+        width = min(keyframe.imagewidth - w[1], self._TILE_SIZE[1])
+        height = min(keyframe.imagelength - l[1], self._TILE_SIZE[0])
+
+        if self.load_tiles:
+            out[
+                d[0], c[0], t[0], l[0] // 1024, w[0] // 1024, :height, :width
+            ] = segment[0, :height, :width, 0]
+        else:
+            out[d[0], c[0], t[0], l[0] : l[0] + height, w[0] : w[0] + width] = segment[
+                0, :height, :width, 0
+            ]
 
     def _read_image(self, X, Y, Z, C, T, output):
-        if (len(C) > 1 and C[0] != 0) or (len(T) > 0 and T[0] != 0):
-            self.logger.warning(
-                "More than channel 0 was specified for channel or timepoint data."
-                + "The Python backend will load only the first channel/timepoint."
-            )
 
         # Get keyframe
         self._keyframe = self._rdr.pages[0].keyframe
+
+        # Open the file
         fh = self._rdr.pages[0].parent.filehandle
+        fh.open()
+
+        # Set tile size if request size is < _TILE_SIZE for efficiency
+        self._TILE_SIZE = (
+            min(self._image.shape[-2], self.frontend._TILE_SIZE),
+            min(self._image.shape[-1], self.frontend._TILE_SIZE),
+        )
 
         # Get binary data info
-        offsets, bytecounts = self._chunk_indices(X, Y, Z)
+        offsets, bytecounts = self._chunk_indices(X, Y, Z, C, T)
 
         self.logger.debug("read_image(): _tile_indices = {}".format(self._tile_indices))
 
         if self.frontend.max_workers > 1:
             with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-                executor.map(self._process_chunk, fh.read_segments(offsets, bytecounts))
+                # cast to list so that any read errors are raised
+                list(
+                    executor.map(
+                        self._process_chunk, fh.read_segments(offsets, bytecounts)
+                    )
+                )
         else:
             for args in fh.read_segments(offsets, bytecounts):
                 self._process_chunk(args)
 
+        # Close the file
+        fh.close()
+
     def close(self):
-        self._rdr.close()
+        if self._rdr is not None:
+            self._rdr.close()
 
     def __del__(self):
         self.close()
