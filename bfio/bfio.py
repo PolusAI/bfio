@@ -76,6 +76,16 @@ class BioReader(BioBase):
     """
 
     logger = logging.getLogger("bfio.bfio.BioReader")
+    _STATE_DICT = [
+        "_metadata",
+        "_DIMS",
+        "_file_path",
+        "max_workers",
+        "_backend_name",
+        "clean_metadata",
+        "_read_only",
+        "_backend",
+    ]
 
     def __init__(
         self,
@@ -129,6 +139,22 @@ class BioReader(BioBase):
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
 
+    def __getstate__(self) -> typing.Dict:
+
+        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+
+        return state_dict
+
+    def __setstate__(self, state) -> None:
+
+        assert all(n in self._STATE_DICT for n in state.keys())
+        assert all(n in state.keys() for n in self._STATE_DICT)
+
+        for k, v in state.items():
+            setattr(self, k, v)
+
+        self._backend.frontend = self
+
     def __getitem__(self, keys: typing.Union[tuple, slice]) -> numpy.ndarray:
         """Image loading using numpy-like indexing.
 
@@ -178,7 +204,6 @@ class BioReader(BioBase):
 
         return self.read(**ind)
 
-    # @profile
     def read(
         self,
         X: typing.Union[list, tuple, None] = None,

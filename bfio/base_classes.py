@@ -114,7 +114,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         # validate/set the backend
         if backend is None:
             extension = "".join(self._file_path.suffixes)
-            if extension.endswith(".ome.tif"):
+            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
                 backend = "python"
             elif extension.endswith(".ome.zarr"):
                 backend = "zarr"
@@ -298,7 +298,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
     def channel_names(self) -> typing.List[str]:
         """Get the channel names for the image."""
         image = self._metadata.images[0]
-        return [image.pixels.channels[0].name for i in range(self.C)]
+        return [c.name for c in image.pixels.channels]
 
     @channel_names.setter
     def channel_names(self, cnames: typing.List[str]):
@@ -306,10 +306,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for i in range(0, len(cnames)):
-            self._metadata.image[0].pixels.channels[i].Name = (
-                "" if cnames[i] is None else cnames[i]
-            )
+        for channel, cname in (self.metadata.images[0].pixels.channels, cnames):
+            channel.name = cname
 
     @property
     def shape(self) -> typing.Tuple[int, int, int, int, int]:
@@ -750,7 +748,6 @@ class AbstractReader(AbstractBackend):
         """
         pass
 
-    # @profile
     def read_image(self, *args):
         """Abstract read image executor.
 

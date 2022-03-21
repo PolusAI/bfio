@@ -6,7 +6,8 @@ import shutil
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
+import threading
 
 # Third party packages
 import imagecodecs
@@ -344,6 +345,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     _rdr: tifffile.TiffFile = None
     _offsets_bytes = None
+    _STATE_DICT = ["_metadata", "frontend"]
 
     def __init__(self, frontend):
         super().__init__(frontend)
@@ -400,6 +402,31 @@ class PythonReader(bfio.base_classes.AbstractReader):
                 "The dimension order of the data is not XYZCT. "
                 + "Use the java backend to read this image."
             )
+        elif self._metadata.images[0].pixels.interleaved:
+            raise TypeError(
+                "The data is RGB interleaved and cannot be read by the PythonReader. "
+                + "Use the java backend to read this image."
+            )
+
+        # Close the reader until we need it
+        self._rdr.filehandle.close()
+
+    def __getstate__(self) -> Dict:
+
+        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+        state_dict.update({"file_path": self.frontend._file_path})
+
+        return state_dict
+
+    def __setstate__(self, state) -> None:
+
+        for k, v in state.items():
+            if k == "file_path":
+                self._lock = threading.Lock()
+                self._rdr = tifffile.TiffFile(v)
+                self._rdr.filehandle.close()
+            else:
+                setattr(self, k, v)
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
@@ -407,7 +434,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
 
             try:
-                # self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
                 self._metadata = ome_types.from_xml(
                     self._rdr.ome_metadata,
                     # Uncomment this when ome_types releases a new version
@@ -560,8 +586,8 @@ class PythonReader(bfio.base_classes.AbstractReader):
             "_process_chunk(): (w,l,d) = {},{},{}".format(w[0], l[0], d[0])
         )
 
-        width = min(keyframe.imagewidth - w[1], self.frontend._TILE_SIZE)
-        height = min(keyframe.imagelength - l[1], self.frontend._TILE_SIZE)
+        width = min(keyframe.imagewidth - w[1], self._TILE_SIZE[1])
+        height = min(keyframe.imagelength - l[1], self._TILE_SIZE[0])
 
         if self.load_tiles:
             out[
@@ -576,7 +602,16 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         # Get keyframe
         self._keyframe = self._rdr.pages[0].keyframe
+
+        # Open the file
         fh = self._rdr.pages[0].parent.filehandle
+        fh.open()
+
+        # Set tile size if request size is < _TILE_SIZE for efficiency
+        self._TILE_SIZE = (
+            min(self._image.shape[-2], self.frontend._TILE_SIZE),
+            min(self._image.shape[-1], self.frontend._TILE_SIZE),
+        )
 
         # Get binary data info
         offsets, bytecounts = self._chunk_indices(X, Y, Z, C, T)
@@ -585,7 +620,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         if self.frontend.max_workers > 1:
             with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-                # execute as a list so that any read errors are raised
+                # cast to list so that any read errors are raised
                 list(
                     executor.map(
                         self._process_chunk, fh.read_segments(offsets, bytecounts)
@@ -595,8 +630,12 @@ class PythonReader(bfio.base_classes.AbstractReader):
             for args in fh.read_segments(offsets, bytecounts):
                 self._process_chunk(args)
 
+        # Close the file
+        fh.close()
+
     def close(self):
-        self._rdr.close()
+        if self._rdr is not None:
+            self._rdr.close()
 
     def __del__(self):
         self.close()
