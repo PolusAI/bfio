@@ -4,7 +4,7 @@ import io
 import logging
 import shutil
 import struct
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Optional, List, Tuple
 import threading
@@ -519,7 +519,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
     def _page_offsets_bytes(self, index: int):
 
         if index == 0:
-
             return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
 
         parent = self._rdr
@@ -683,7 +682,7 @@ class TiffIFDHeader:
             offset, pos = self.dataoffsetsoffset
             self.ifd.seek(offset)
             if pos is not None:
-                self.ifd.write(self._pack(offsetformat, self._ifdpos + pos))
+                self.ifd.write(self._pack(offsetformat, self._ifdstart + pos))
                 self.ifd.seek(pos)
                 for size in self.databyteoffsets:
                     self.ifd.write(self._pack(offsetformat, size))
@@ -694,7 +693,7 @@ class TiffIFDHeader:
             offset, pos = self.databytecountsoffset
             self.ifd.seek(offset)
             if pos:
-                self.ifd.write(self._pack(offsetformat, self._ifdpos + pos))
+                self.ifd.write(self._pack(offsetformat, self._ifdstart + pos))
                 self.ifd.seek(pos)
             self.ifd.write(self._pack(bytecountformat, *self.databytecounts))
 
@@ -719,7 +718,7 @@ class TiffIFDHeaders(object):
 
         self.tiff = writer._writer.tiff
         self.tags = writer._tags
-        self.page_count = writer.frontend.Z  # * writer.frontend.C * writer.frontend.T
+        self.page_count = writer.frontend.Z * writer.frontend.C * writer.frontend.T
         self.headers = [
             TiffIFDHeader(
                 writer._numtiles,
@@ -843,24 +842,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
     _current_page = None
 
     logger = logging.getLogger("bfio.backends.PythonWriter")
-
-    def __init__(self, frontend):
-        super().__init__(frontend)
-
-        if self.frontend.C > 1:
-            self.logger.warning(
-                "The BioWriter only writes single channel "
-                + "images, but the metadata has {} channels. ".format(self.frontend.C)
-                + "Setting the number of channels to 1."
-            )
-            self.frontend.C = 1
-        if self.frontend.T > 1:
-            self.logger.warning(
-                "The BioWriter only writes single timepoint "
-                + "images, but the metadata has {} timepoints. ".format(self.frontend.T)
-                + "Setting the number of timepoints to 1."
-            )
-            self.frontend.T = 1
 
     def _pack(self, fmt, *val):
         if fmt[0] not in "<>":
@@ -1005,7 +986,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         offsetsize = self._writer.tiff.offsetsize
 
-        # self._compresstag = tifffile.TIFF.COMPRESSION.NONE
         self._compresstag = tifffile.TIFF.COMPRESSION.ADOBE_DEFLATE
 
         # normalize data shape to 5D or 6D, depending on volume:
@@ -1152,7 +1132,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                         ]
                         yield chunk
 
-    def _write_tiles(self, data, X, Y, index):
+    def _write_tiles(self, data, X, Y, Z, C, T):
 
         assert len(X) == 2 and len(Y) == 2
 
@@ -1180,31 +1160,56 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             (X[1] - X[0] - 1 + self.frontend._TILE_SIZE) // self.frontend._TILE_SIZE,
         )
 
-        data = data.reshape(1, 1, 1, data.shape[0], data.shape[1], 1)
-        tileiter = self.iter_tiles(
-            data, (self.frontend._TILE_SIZE, self.frontend._TILE_SIZE), tile_shape
-        )
+        tileiters = []
+        for ti, t in zip(range(len(T)), T):
+            t_index = t * self.frontend.Z * self.frontend.C
+            for ci, c in zip(range(len(C)), C):
+                c_index = t_index + c * self.frontend.Z
+                for zi, z in zip(range(0, Z[1] - Z[0]), range(Z[0], Z[1])):
+                    index = c_index + z
+                    tileiters.append(
+                        (
+                            index,
+                            self.iter_tiles(
+                                data[:, :, zi, ci, ti].reshape(
+                                    1, 1, 1, data.shape[0], data.shape[1], 1
+                                ),
+                                (self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+                                tile_shape,
+                            ),
+                        )
+                    )
 
-        def compress(data, level=1):
+        def compress(page_index, tile_index, data, level=1):
 
-            return imagecodecs.deflate_encode(data, level)
+            return (page_index, tile_index, imagecodecs.deflate_encode(data, level))
 
         if self.frontend.max_workers > 1:
 
             with ThreadPoolExecutor(max_workers=self.frontend.max_workers) as executor:
+                compressed_tiles = []
+                for page_index, tileiter in tileiters:
 
-                for tileindex, tile in zip(tiles, executor.map(compress, tileiter)):
-                    self.headers[index].databyteoffsets[tileindex] = fh.tell()
+                    for tileindex, tile in zip(tiles, tileiter):
+                        compressed_tiles.append(
+                            executor.submit(compress, page_index, tileindex, tile)
+                        )
+
+                for thread in as_completed(compressed_tiles):
+
+                    page_index, tileindex, tile = thread.result()
+                    self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
                     fh.write(tile)
-                    self.headers[index].databytecounts[tileindex] = len(tile)
+                    self.headers[page_index].databytecounts[tileindex] = len(tile)
 
         else:
-            for tileindex, tile in zip(tiles, tileiter):
+            for page_index, tileiter in tileiters:
+                for tileindex, tile in zip(tiles, tileiter):
 
-                t = compress(tile)
-                self.headers[index].databyteoffsets[tileindex] = fh.tell()
-                fh.write(t)
-                self.headers[index].databytecounts[tileindex] = len(t)
+                    _, _, t = compress(page_index, tileindex, tile)
+                    self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
+                    fh.write(t)
+                    self.headers[page_index].databytecounts[tileindex] = len(t)
 
     def close(self):
         """close_image Close the image.
@@ -1221,15 +1226,8 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     def _write_image(self, X, Y, Z, C, T, image):
 
-        if self._current_page is not None and Z[0] < self._current_page:
-            raise ValueError(
-                "Cannot write z layers below the current open page. "
-                + "(current page={},Z[0]={})".format(self._current_page, Z[0])
-            )
-
         # Do the work
-        for zi, z in zip(range(0, Z[1] - Z[0]), range(Z[0], Z[1])):
-            self._write_tiles(image[..., zi, 0, 0], X, Y, z)
+        self._write_tiles(image, X, Y, Z, C, T)
 
     def __del__(self):
         self.close()
@@ -1512,7 +1510,7 @@ try:
 
 except ModuleNotFoundError:
 
-    logger.info(
+    logger.warning(
         "Java backend is not available. This could be due to a "
         + "missing dependency (jpype)."
     )

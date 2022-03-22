@@ -1002,17 +1002,17 @@ class BioWriter(BioBase):
                 if value.shape[i] != getattr(self, d):
                     raise IndexError(
                         "Shape of image {} does not match the ".format(value.shape)
-                        + "save dimensions {}.".format(self.shape)
+                        + "save dimensions {}.".format(ind)
                     )
             elif d in "YXZ" and ind[d][1] - ind[d][0] != value.shape[i]:
                 raise IndexError(
                     "Shape of image {} does not match the ".format(value.shape)
-                    + "save dimensions {}.".format((s[1] - s[0] for s in ind.values()))
+                    + "save dimensions {}.".format(ind)
                 )
             elif d in "CT" and len(ind[d]) != value.shape[i]:
                 raise IndexError(
                     "Shape of image {} does not match the ".format(value.shape)
-                    + "save dimensions {}.".format((s[1] - s[0] for s in ind.values()))
+                    + "save dimensions {}.".format(ind)
                 )
             elif d in "YXZ":
                 ind[d] = ind[d][0]
