@@ -843,6 +843,10 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     logger = logging.getLogger("bfio.backends.PythonWriter")
 
+    def __init__(self, frontend):
+
+        super().__init__(frontend)
+
     def _pack(self, fmt, *val):
         if fmt[0] not in "<>":
             fmt = self._writer.tiff.byteorder + fmt
