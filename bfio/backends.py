@@ -688,7 +688,6 @@ class TiffIFDHeader:
                 for size in self.databyteoffsets:
                     self.ifd.write(self._pack(offsetformat, size))
             else:
-                print(self.databyteoffsets)
                 self.ifd.write(self._pack(offsetformat, self.databyteoffsets[0]))
 
             # update strip/tile bytecounts
@@ -706,7 +705,6 @@ class TiffIFDHeader:
     def set_next_ifd(self, pos):
 
         self.ifd.seek(self.ifdoffset)
-        print(f"Next page position: {pos}")
         self.ifd.write(self._pack(self.offsetformat, pos))
         self.ifd.seek(self.ifdsize)
 
@@ -769,9 +767,6 @@ class TiffIFDHeaders(object):
         return self.headers[index]
 
     def _generate_page(self, index):
-
-        print(f"Page #{index}")
-        print(f"Page start: {self._ifdpos}")
 
         tagnoformat = self.tiff.tagnoformat
         offsetformat = self.tiff.offsetformat
@@ -1136,8 +1131,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         skip = (16 - (headers_size % 16)) % 16
         fh.seek(skip, 1)
         self._dataoffset = headers_size + skip
-
-        print(f"dataoffset: {self._dataoffset}")
 
     def iter_tiles(self, data, tile, tiles):
         """Return iterator over tiles in data array of normalized shape."""
