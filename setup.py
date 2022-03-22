@@ -34,7 +34,7 @@ setup(
     ],
     python_requires=">=3.6",
     install_requires=[
-        "tifffile>=2022.3.16",
+        "tifffile>=2021.8.30",
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
         "ome-types>=0.2.10",

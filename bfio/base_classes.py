@@ -287,8 +287,53 @@ class BioBase(object, metaclass=abc.ABCMeta):
             else:
                 for i in range(len(self._metadata.images[0].pixels.channels), value):
                     self._metadata.images[0].pixels.channels.append(
-                        ome_types.model.Channel()
+                        ome_types.model.Channel(samples_per_pixel=1)
                     )
+
+        if len(self._metadata.images[0].pixels.planes) != (self.Z * self.C * self.T):
+            original_planes = self._metadata.images[0].pixels.planes
+            planes = []
+            for t in range(self.T):
+                index = t
+
+                tp = []
+                # Try to preserve timeslice plane metadata
+                tp = [p for p in original_planes if p.the_t == t]
+
+                for c in range(self.C):
+                    index *= self.C + c
+
+                    cp = [c for c in tp if c.the_c == c]
+
+                    for z in range(self.Z):
+                        index *= self.Z + z
+
+                        zp = [z for z in cp if z.the_z == z]
+
+                        # If a place coordinate matches, use that
+                        if len(zp) > 0:
+                            zp = zp[0]
+
+                        # If no z-match could be found, find a channel match and modify
+                        elif len(cp) > 0:
+
+                            zp = ome_types.model.Plane(**cp[0].dict())
+                            zp.the_z = z
+
+                        # If no channel match, try to find a timepoint match and modify
+                        elif len(tp) > 0:
+
+                            zp = ome_types.model.Plane(**tp[0].dict())
+                            zp.the_c = c
+                            zp.the_z = z
+
+                        # As a last resort, create a plane from scratch
+                        else:
+                            zp = ome_types.model.Plane(the_z=z, the_c=c, the_t=t)
+
+                        planes.append(zp)
+
+            self._metadata.images[0].pixels.planes = planes
 
     """ ------------------------------ """
     """ -Get/Set Dimension Properties- """
@@ -326,8 +371,13 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     @shape.setter
     def shape(self, new_shape: typing.Tuple[int, int, int, int, int]):
-        assert len(new_shape) == 5
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format("cnames")
         for s, d in zip(new_shape, "yxzct"):
+            if d in "ct" and self._backend_name == "python" and s > 1:
+                raise ValueError(
+                    "The BioWriter with 'python' backend can only write "
+                    + "1 timeslice/channel images."
+                )
             setattr(self, d, s)
 
     @property
@@ -519,7 +569,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
                 self._metadata.images[
                     0
                 ].pixels.type = ome_types.model.simple_types.PixelType(k)
-                return
 
     @property
     def samples_per_pixel(self) -> int:

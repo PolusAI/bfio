@@ -1002,9 +1002,7 @@ class BioWriter(BioBase):
                 if value.shape[i] != getattr(self, d):
                     raise IndexError(
                         "Shape of image {} does not match the ".format(value.shape)
-                        + "save dimensions {}.".format(
-                            list(s[1] - s[0] for s in ind.values())
-                        )
+                        + "save dimensions {}.".format(self.shape)
                     )
             elif d in "YXZ" and ind[d][1] - ind[d][0] != value.shape[i]:
                 raise IndexError(
@@ -1030,18 +1028,30 @@ class BioWriter(BioBase):
         assert (
             not self._read_only
         ), "The image has started to be written. To modify the xml again, reinitialize."
-        omexml = ome_types.model.OME.construct()
-        omexml.images[0].name = Path(self._file_path).name
-        p = omexml.image[0].pixels
-
-        assert isinstance(p, ome_types.model.Pixels)
-
-        for d in "xyzct":
-            setattr(p, "size_{}".format(d), 1)
-
-        p.dimension_order = ome_types.model.Pixels.dimension_order.XYZCT
-        p.type = ome_types.model.simple_types.UINT8
-        p.channel_count = 1
+        omexml = ome_types.model.OME()
+        omexml.images.append(
+            ome_types.model.Image(
+                id="Image:0",
+                pixels=ome_types.model.Pixels(
+                    id="Pixels:0",
+                    dimension_order="XYZCT",
+                    big_endian=False,
+                    size_c=1,
+                    size_z=1,
+                    size_t=1,
+                    size_x=1,
+                    size_y=1,
+                    channels=[
+                        ome_types.model.Channel(
+                            id="Channel:0",
+                            samples_per_pixel=1,
+                        )
+                    ],
+                    type=ome_types.model.simple_types.PixelType.UINT8,
+                    tiff_data_blocks=[ome_types.model.TiffData()],
+                ),
+            )
+        )
 
         return omexml
 

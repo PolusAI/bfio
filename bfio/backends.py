@@ -666,7 +666,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             self.frontend.T = 1
 
     def _pack(self, fmt, *val):
-        return struct.pack(self._byteorder + fmt, *val)
+        if fmt[0] not in "<>":
+            fmt = self._writer.tiff.byteorder + fmt
+        return struct.pack(fmt, *val)
 
     def _addtag(self, code, dtype, count, value, writeonce=False):
         tags = self._tags
@@ -676,70 +678,102 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         if not isinstance(code, int):
             code = tifffile.TIFF.TAGS[code]
         try:
-            tifftype = tifffile.TIFF.DATA_DTYPES[dtype]
+            datatype = dtype
+            dataformat = tifffile.TIFF.DATA_FORMATS[datatype][-1]
         except KeyError as exc:
-            raise ValueError(f"unknown dtype {dtype}") from exc
-        rawcount = count
+            try:
+                dataformat = dtype
+                if dataformat[0] in "<>":
+                    dataformat = dataformat[1:]
+                datatype = tifffile.TIFF.DATA_DTYPES[dataformat]
+            except (KeyError, TypeError):
+                raise ValueError(f"unknown dtype {dtype}") from exc
+        del dtype
 
-        if dtype == "s":
-            # strings; enforce 7-bit ASCII on unicode strings
+        rawcount = count
+        if datatype == 2:
+            # string
+            if isinstance(value, str):
+                if code != 270:
+                    # enforce 7-bit ASCII on Unicode strings
+                    try:
+                        value = value.encode("ascii")
+                    except UnicodeEncodeError as exc:
+                        raise ValueError("TIFF strings must be 7-bit ASCII") from exc
+                else:
+                    # OME description must be utf-8, which breaks tiff spec
+                    value = value.encode()
+            elif not isinstance(value, bytes):
+                raise ValueError("TIFF strings must be 7-bit ASCII")
+            if len(value) == 0 or value[-1] != b"\x00":
+                value += b"\x00"
+            count = len(value)
             if code == 270:
-                value = tifffile.bytestr(value, "utf-8") + b"\0"
+                self._descriptiontag = tifffile.TiffTag(self, 0, 270, 2, count, None, 0)
+                rawcount = value.find(b"\x00\x00")
+                if rawcount < 0:
+                    rawcount = count
+                else:
+                    # length of string without buffer
+                    rawcount = max(self._writer.tiff.offsetsize + 1, rawcount + 1)
+                    rawcount = min(count, rawcount)
             else:
-                value = tifffile.bytestr(value, "ascii") + b"\0"
-            count = rawcount = len(value)
-            rawcount = value.find(b"\0\0")
-            if rawcount < 0:
                 rawcount = count
-            else:
-                rawcount += 1  # length of string without buffer
             value = (value,)
+
         elif isinstance(value, bytes):
             # packed binary data
-            dtsize = struct.calcsize(dtype)
-            if len(value) % dtsize:
+            itemsize = struct.calcsize(dataformat)
+            if len(value) % itemsize:
                 raise ValueError("invalid packed binary data")
-            count = len(value) // dtsize
-        if len(dtype) > 1:
-            count *= int(dtype[:-1])
-            dtype = dtype[-1]
+            count = len(value) // itemsize
+            rawcount = count
+
+        if datatype in (5, 10):  # rational
+            count *= 2
+            dataformat = dataformat[-1]
+
         ifdentry = [
-            self._pack("HH", code, tifftype),
-            self._pack(self._writer._offsetformat, rawcount),
+            self._pack("HH", code, datatype),
+            self._pack(self._writer.tiff.offsetformat, rawcount),
         ]
+
         ifdvalue = None
-        if struct.calcsize(dtype) * count <= self._writer._offsetsize:
+        if struct.calcsize(dataformat) * count <= self._writer.tiff.offsetsize:
             # value(s) can be written directly
             if isinstance(value, bytes):
-                ifdentry.append(self._pack(self._writer._valueformat, value))
+                ifdentry.append(self._pack(f"{self.tiff.offsetsize}s", value))
             elif count == 1:
                 if isinstance(value, (tuple, list, numpy.ndarray)):
                     value = value[0]
                 ifdentry.append(
-                    self._pack(self._writer._valueformat, self._pack(dtype, value))
+                    self._pack(
+                        f"{self._writer.tiff.offsetsize}s",
+                        self._pack(dataformat, value),
+                    )
                 )
             else:
                 ifdentry.append(
                     self._pack(
-                        self._writer._valueformat,
-                        self._pack(str(count) + dtype, *value),
+                        f"{self._writer.tiff.offsetsize}s",
+                        self._pack(f"{count}{dataformat}", *value),
                     )
                 )
         else:
             # use offset to value(s)
-            ifdentry.append(self._pack(self._writer._offsetformat, 0))
+            ifdentry.append(self._pack(self._writer.tiff.offsetformat, 0))
             if isinstance(value, bytes):
                 ifdvalue = value
             elif isinstance(value, numpy.ndarray):
                 if value.size != count:
                     raise RuntimeError("value.size != count")
-                if value.dtype.char != dtype:
+                if value.dtype.char != dataformat:
                     raise RuntimeError("value.dtype.char != dtype")
                 ifdvalue = value.tobytes()
             elif isinstance(value, (tuple, list)):
-                ifdvalue = self._pack(str(count) + dtype, *value)
+                ifdvalue = self._pack(f"{count}{dataformat}", *value)
             else:
-                ifdvalue = self._pack(dtype, value)
+                ifdvalue = self._pack(dataformat, value)
         tags.append((code, b"".join(ifdentry), ifdvalue, writeonce))
 
     def _init_writer(self):
@@ -766,13 +800,13 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             self.frontend._file_path, bigtiff=big_tiff, append=False
         )
 
-        self._byteorder = self._writer._byteorder
+        self._byteorder = self._writer.tiff.byteorder
 
         self._datashape = (1, 1, 1) + (self.frontend.Y, self.frontend.X) + (1,)
 
         self._datadtype = numpy.dtype(self.frontend.dtype).newbyteorder(self._byteorder)
 
-        offsetsize = self._writer._offsetsize
+        offsetsize = self._writer.tiff.offsetsize
 
         # self._compresstag = tifffile.TIFF.COMPRESSION.NONE
         self._compresstag = tifffile.TIFF.COMPRESSION.ADOBE_DEFLATE
@@ -865,7 +899,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         )
         self._addtag(
             self._tagoffsets,
-            self._writer._offsetformat,
+            self._writer.tiff.offsetformat,
             self._numtiles,
             [0] * self._numtiles,
         )
@@ -889,25 +923,25 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 "ImageJ=\nhyperstack=true\nimages=1\n"
                 + f"channels={self.frontend.C}\n"
                 + f"slices={self.frontend.Z}\n"
-                + "frames={self.frontend.T}"
+                + f"frames={self.frontend.T}"
             )
             self._addtag(270, "s", 0, description)  # Description
             self._tags = sorted(self._tags, key=lambda x: x[0])
 
-        fh = self._writer._fh
+        fh = self._writer.filehandle
 
         self._ifdpos = fh.tell()
 
-        tagnoformat = self._writer._tagnoformat
-        offsetformat = self._writer._offsetformat
-        offsetsize = self._writer._offsetsize
-        tagsize = self._writer._tagsize
+        tagnoformat = self._writer.tiff.tagnoformat
+        offsetformat = self._writer.tiff.offsetformat
+        offsetsize = self._writer.tiff.offsetsize
+        tagsize = self._writer.tiff.tagsize
         tagbytecounts = self._tagbytecounts
         tagoffsets = self._tagoffsets
         tags = self._tags
 
         if self._ifdpos % 2:
-            # location of IFD must begin on a word boundary
+            # location of IFD must begin on a word boundary_ifdoffset
             fh.write(b"\0")
             self._ifdpos += 1
 
@@ -975,10 +1009,10 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     def _close_page(self):
 
-        offsetformat = self._writer._offsetformat
+        offsetformat = self._writer.tiff.offsetformat
         bytecountformat = self._bytecountformat
 
-        fh = self._writer._fh
+        fh = self._writer.filehandle
 
         # update strip/tile offsets
         offset, pos = self._dataoffsetsoffset
@@ -1013,6 +1047,26 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._page_open = False
 
+    def iter_tiles(self, data, tile, tiles):
+        """Return iterator over tiles in data array of normalized shape."""
+        shape = data.shape
+        if not 1 < len(tile) < 4:
+            raise ValueError("invalid tile shape")
+        for page in data:
+            for plane in page:
+                for ty in range(tiles[0]):
+                    for tx in range(tiles[1]):
+                        chunk = numpy.empty(tile + (shape[-1],), dtype=data.dtype)
+                        c1 = min(tile[0], shape[3] - ty * tile[0])
+                        c2 = min(tile[1], shape[4] - tx * tile[1])
+                        chunk[c1:, c2:] = 0
+                        chunk[:c1, :c2] = plane[
+                            0,
+                            ty * tile[0] : ty * tile[0] + c1,
+                            tx * tile[1] : tx * tile[1] + c2,
+                        ]
+                        yield chunk
+
     def _write_tiles(self, data, X, Y):
 
         assert len(X) == 2 and len(Y) == 2
@@ -1022,7 +1076,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 "X or Y positions are not on tile boundary, tile may save incorrectly"
             )
 
-        fh = self._writer._fh
+        fh = self._writer.filehandle
 
         x_tiles = list(
             range(
@@ -1042,7 +1096,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         )
 
         data = data.reshape(1, 1, 1, data.shape[0], data.shape[1], 1)
-        tileiter = tifffile.iter_tiles(
+        tileiter = self.iter_tiles(
             data, (self.frontend._TILE_SIZE, self.frontend._TILE_SIZE), tile_shape
         )
 
@@ -1050,18 +1104,15 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
             return imagecodecs.deflate_encode(data, level)
 
-        tileiter = [copy.deepcopy(tile) for tile in tileiter]
         if self.frontend.max_workers > 1:
 
             with ThreadPoolExecutor(max_workers=self.frontend.max_workers) as executor:
 
-                compressed_tiles = iter(executor.map(compress, tileiter))
+                for tileindex, tile in zip(tiles, executor.map(compress, tileiter)):
+                    self._databyteoffsets[tileindex] = fh.tell()
+                    fh.write(tile)
+                    self._databytecounts[tileindex] = len(tile)
 
-            for tileindex in tiles:
-                t = next(compressed_tiles)
-                self._databyteoffsets[tileindex] = fh.tell()
-                fh.write(t)
-                self._databytecounts[tileindex] = len(t)
         else:
             for tileindex, tile in zip(tiles, tileiter):
 
@@ -1069,8 +1120,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 self._databyteoffsets[tileindex] = fh.tell()
                 fh.write(t)
                 self._databytecounts[tileindex] = len(t)
-
-        return None
 
     def close(self):
         """close_image Close the image.
@@ -1082,7 +1131,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             if self._page_open:
                 self._close_page()
             self._ifd.close()
-            self._writer._fh.close()
+            self._writer.filehandle.close()
 
     def _write_image(self, X, Y, Z, C, T, image):
 
@@ -1362,13 +1411,14 @@ try:
                 self._process_chunk(args)
                 self.first_tile = True
 
-            if self.frontend.max_workers > 1:
-                with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-                    executor.map(self._process_chunk, self._tile_indices)
-            else:
+            # TODO: implement multi-threaded reads for the java backend (impossible?)
+            # if self.frontend.max_workers > 1:
+            #     with ThreadPoolExecutor(self.frontend.max_workers) as executor:
+            #         executor.map(self._process_chunk, self._tile_indices)
+            # else:
 
-                for args in self._tile_indices:
-                    self._process_chunk(args)
+            for args in self._tile_indices:
+                self._process_chunk(args)
 
         def close(self):
             if jpype.isJVMStarted() and self._writer is not None:
