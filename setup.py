@@ -41,7 +41,7 @@ setup(
         "lxml",  # remove this when upgrading to the next version of ome-types
     ],
     extras_require={
-        "jpype": ["bioformats_jar==6.7.0.post2"],
+        "bioformats": ["bioformats_jar==6.7.0.post2"],
         "zarr": ["zarr>=2.6.1"],
         "all": ["zarr>=2.6.1", "bioformats_jar==6.7.0.post2"],
         "dev": [
