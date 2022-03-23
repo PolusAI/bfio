@@ -47,7 +47,7 @@ be installed using pip:
 
 Additionally, `bfio` with other dependencies can be installed:
 
-1. `pip install bfio[bioformtas]` - Adds support for BioFormats/Java. See [License](#license) for additional information.
+1. `pip install bfio[bioformats]` - Adds support for BioFormats/Java. See [License](#license) for additional information.
 2. `pip install bfio[zarr]` - Adds support for OME Zarr
 3. `pip install bfio[all]` - Installs all dependencies.
 
@@ -88,7 +88,7 @@ Creative Commons License - see the [LICENSE](LICENSE) file for details.
 **NOTE**
 
 Bioformats is licensed under GPL, and as a consequence so is the `bioformats_jar` 
-package. These packages and libraries are installed when using the `bfio[java]` option.
+package. These packages and libraries are installed when using the `bfio[bioformats]` option.
 
 ## Acknowledgments
 
