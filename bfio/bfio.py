@@ -8,12 +8,11 @@ from pathlib import Path
 import numpy
 import ome_types
 
-from bfio import JARS, LOGBACK, backends
+from bfio import backends
 from bfio.base_classes import BioBase
 
 try:
-    import jpype
-    import jpype.imports
+    from bioformats_jar import get_loci
 
     def start() -> str:
         """Start the jvm.
@@ -24,18 +23,10 @@ try:
         Return:
             The Bio-Formats JAR version.
         """
-        if jpype.isJVMStarted():
-            from loci.formats import FormatTools
 
-            JAR_VERSION = FormatTools.VERSION
-            return JAR_VERSION
-
-        logging.getLogger("bfio.start").info("Starting the jvm.")
-        jpype.startJVM(f"-Dlogback.configurationFile={LOGBACK}", classpath=JARS)
-
-        from loci.formats import FormatTools
-
-        JAR_VERSION = FormatTools.VERSION
+        global JAR_VERSION
+        loci = get_loci()
+        JAR_VERSION = loci.formats.FormatTools.VERSION
 
         logging.getLogger("bfio.start").info(
             "bioformats_package.jar version = {}".format(JAR_VERSION)
