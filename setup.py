@@ -24,7 +24,7 @@ setup(
     },
     entry_points={"napari.plugin": "bfio = bfio.bfio"},
     packages=find_packages(),
-    package_data={"bfio": ["jars/*.jar", "jars/*.xml", "VERSION"]},
+    package_data={"bfio": ["VERSION"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Programming Language :: Python :: 3",
@@ -41,9 +41,13 @@ setup(
         "lxml",  # remove this when upgrading to the next version of ome-types
     ],
     extras_require={
-        "jpype": ["jpype1>=1.2.1"],
+        "bioformats": ["bioformats_jar==6.7.0.post2"],
         "zarr": ["zarr>=2.6.1"],
-        "all": ["jpype1>=1.2.1", "zarr>=2.6.1"],
-        "dev": ["jpype1>=1.2.1", "zarr>=2.6.1", "requests>=2.26.0"],
+        "all": ["zarr>=2.6.1", "bioformats_jar==6.7.0.post2"],
+        "dev": [
+            "zarr>=2.6.1",
+            "requests>=2.26.0",
+            "bioformats_jar==6.7.0.post2",
+        ],
     },
 )

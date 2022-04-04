@@ -18,7 +18,11 @@ Java and Bioformats
 To use Bioformats, it is necessary to install Java 8 or later. Once Java is
 installed, ``bfio`` can be installed with support for Java using:
 
-pip install bfio['jpype']
+pip install bfio['bioformats']
+
+NOTE: The `bioformats_jar` package and BioFormats are licensed under GPL, while `bfio`
+is licensed under MIT. This may have consequences when packaging any software that uses
+`bfio` as a dependency when this option is used.
 
 Zarr
 ----

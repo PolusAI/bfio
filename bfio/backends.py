@@ -1238,6 +1238,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
 
 try:
+    from bioformats_jar import get_loci
     import jpype
     import jpype.imports
     from jpype.types import JString
@@ -1250,20 +1251,19 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            if not jpype.isJVMStarted():
-                bfio.start()
+            loci = get_loci()
 
             global ImageReader
-            from loci.formats import ImageReader
+            ImageReader = loci.formats.ImageReader
 
             global ServiceFactory
-            from loci.common.services import ServiceFactory
+            ServiceFactory = loci.common.services.ServiceFactory
 
             global OMEXMLService
-            from loci.formats.services import OMEXMLService
+            OMEXMLService = loci.formats.services.OMEXMLService
 
             global IMetadata
-            from loci.formats.meta import IMetadata
+            IMetadata = loci.formats.meta.IMetadata
 
             JavaReader._classes_loaded = True
 
@@ -1411,10 +1411,6 @@ try:
                         new_channel = ome_types.model.Channel(**channel.dict())
                         new_channel.id = channel.id + f":{c}"
                         image.pixels.channels.append(new_channel)
-
-            # Test to see if the loci_tools.jar is present
-            if bfio.JARS is None:
-                raise FileNotFoundError("The bioformats.jar could not be found.")
 
         def _init_writer(self):
             """_init_writer Initializes file writing.
