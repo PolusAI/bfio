@@ -1290,18 +1290,9 @@ try:
 
             if self._metadata is None:
 
-                try:
-                    self._metadata = ome_types.from_xml(str(self.omexml.dumpXML()))
-                except XMLSchemaValidationError:
-                    if self.frontend.clean_metadata:
-                        self._metadata = ome_types.from_xml(
-                            clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
-                        )
-                        self.logger.warning(
-                            "read_metadata(): OME XML required reformatting."
-                        )
-                    else:
-                        raise
+                self._metadata = ome_types.from_xml(
+                    clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
+                )
 
             return self._metadata
 
@@ -1416,8 +1407,10 @@ try:
                     expand_channels = channel.samples_per_pixel
                     channel.samples_per_pixel = 1
 
-                    for _ in range(expand_channels):
-                        image.pixels.channels.append(channel)
+                    for c in range(expand_channels):
+                        new_channel = ome_types.model.Channel(**channel.dict())
+                        new_channel.id = channel.id + f":{c}"
+                        image.pixels.channels.append(new_channel)
 
             # Test to see if the loci_tools.jar is present
             if bfio.JARS is None:
@@ -1494,12 +1487,6 @@ try:
                     )
                 self._process_chunk(args)
                 self.first_tile = True
-
-            # TODO: implement multi-threaded reads for the java backend (impossible?)
-            # if self.frontend.max_workers > 1:
-            #     with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-            #         executor.map(self._process_chunk, self._tile_indices)
-            # else:
 
             for args in self._tile_indices:
                 self._process_chunk(args)

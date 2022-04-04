@@ -577,9 +577,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     @samples_per_pixel.setter
     def samples_per_pixel(self, samples_per_pixel: int):
-        self._metadata.images[0].pixels.channels[
-            0
-        ].samples_per_pixel = samples_per_pixel
+        for channel in self._metadata.images[0].pixels.channels:
+            channel.samples_per_pixel = samples_per_pixel
 
     @property
     def spp(self):

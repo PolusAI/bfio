@@ -119,7 +119,23 @@ class BioReader(BioBase):
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
         elif self._backend_name == "java":
-            self._backend = backends.JavaReader(self)
+            try:
+                self._backend = backends.JavaReader(self)
+            except Exception as err:
+                if repr(err).split("(")[0] in [
+                    "UnknownFormatException",
+                    "MissingLibraryException",
+                ]:
+                    self.logger.error(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                    raise TypeError(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                else:
+                    raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrReader(self)
 
@@ -896,7 +912,7 @@ class BioWriter(BioBase):
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = ome_types.from_xml(ome_types.to_xml(metadata))
+            self._metadata = metadata.copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
