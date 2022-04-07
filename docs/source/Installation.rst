@@ -7,10 +7,16 @@ consideration of containerization.
 Base Package
 ------------
 
-The base package can only read/write tiled, OME TIFF images. It can be installed
-using:
+The base package can only read/write tiled, OME TIFF images. It can be installed using:
 
 ``pip install bfio``
+
+To install all reading and writing options, install with all dependencies:
+
+``pip install bfio[all]``
+
+NOTE: See the Java and Bioformats note about licensing considerations when installing
+using the `bfio[all]` option.
 
 Java and Bioformats
 -------------------

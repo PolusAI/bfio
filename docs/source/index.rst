@@ -3,10 +3,11 @@ BioFormats Input/Ouput (bfio) Utility
 =====================================
 
 The ``bfio`` utility is an easy to use, image input/output utility optimized to
-scalably read and write formats supported by
+scalably read and write OME TIFF and OME Zarr images as well as all formats supported by
 `Bioformats <https://www.openmicroscopy.org/bio-formats/>`_
-. Reading of data makes direct usage of BioFormats using JPype, giving ``bfio``
-the ability to read any of the 150+ formats supported by BioFormats.
+. Reading of data makes direct usage of BioFormats (when using the `bioformats` install
+option) using JPype, giving ``bfio`` the ability to read any of the 150+ formats
+supported by BioFormats.
 
 For file outputs, only two file formats are supported: tiled OME TIFF, and OME
 Zarr. These two file formats are supported because they are scalable, permitting

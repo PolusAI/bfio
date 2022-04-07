@@ -98,7 +98,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path (typing.Union[str, Path]): Path to output file
             max_workers (typing.Optional[int], optional): Number of threads to be used.
                 Defaults to None.
-            backend (typing.Optional[str], optional): Must be `python`, `java`,
+            backend (typing.Optional[str], optional): Must be `python`, `bioformats`,
                 or `zarr`.If None, attempts to detect type. Defaults to None.
             read_only (typing.Optional[bool], optional): [description].
                 Defaults to True.
@@ -119,18 +119,18 @@ class BioBase(object, metaclass=abc.ABCMeta):
             elif extension.endswith(".ome.zarr"):
                 backend = "zarr"
             else:
-                backend = "java"
-        elif backend.lower() not in ["python", "java", "zarr"]:
+                backend = "bioformats"
+        elif backend.lower() not in ["python", "bioformats", "zarr"]:
             raise ValueError(
-                'Keyword argument backend must be one of ["python","java","zarr"]'
+                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
             )
         self._backend_name = backend.lower()
 
         # Set the number of workers for multi-threaded loading
-        if self._backend_name == "java":
+        if self._backend_name == "bioformats":
             if max_workers is not None:
                 self.logger.warning(
-                    "The max_workers keyword was present, but the java backend only "
+                    "The max_workers keyword was present, but bioformats backend only "
                     + "operates with a single worker. Setting max_workers=1."
                 )
             self.max_workers = 1

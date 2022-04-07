@@ -10,21 +10,20 @@ The bfio package is designed to make it easy to process arbitrarily sized images
 in a fast, scalable way. The two core classes, :doc:`/Reference/BioReader` and
 :doc:`/Reference/BioWriter`, can use one of three different backends depending
 on the file type that will be read. Usually, the proper backend will be selected
-when opening a file, but periodically it doesn't select the proper backend so
+when opening a file, but periodically it will not select the proper backend so
 it is useful to mention them here:
 
-1. ``backend='python'`` can only be used to read/write OME tiled tiff images.
+1. ``backend="python"`` can only be used to read/write OME tiled tiff images.
    Tiled tiff is the preferred file format for reading/writing arbitrarily sized
-   images. **Does not work for writing 3d chunks of images.**
-2. ``backend='java'`` can be used to read any
+   images.
+2. ``backend="bioformats"`` can be used to read any
    `any format supported by Bioformats <https://docs.openmicroscopy.org/bio-formats/6.1.0/supported-formats.html>`_.
    The BioWriter with java backend will only save images as OME tiled tiff.
-3. ``backend='zarr'`` can be used to read/write a subset of Zarr files following
+3. ``backend="zarr"`` can be used to read/write a subset of Zarr files following
    the `OME Zarr spec. <https://ngff.openmicroscopy.org/latest/>`_.
-   The BioWriter with java backend will only save images as OME tiled tiff.
 
 The advantage to using the ``python`` and ``zarr`` backends are speed and
-scalability at the expense of a rigid file structure, while the ``java`` backend
+scalability at the expense of a rigid file structure, while the ``bioformats`` backend
 provides broad access to a wide array of file types but is considerably slower.
 
 In this example, the basic useage of two core classes are demonstrated by
@@ -42,12 +41,17 @@ Install Dependencies
 To run this example, a few dependencies are required. First, ensure Java is
 installed. Then install ``bfio`` using:
 
-``pip install bfio['jpype']``
+``pip install bfio['bioformats']``
 
 .. note::
 
     JPype and Bioformats require Java 8 or later. ``bfio`` has been tested
     using Java 8.
+
+.. note::
+
+    Bioformats is licensed under GPL. If you plan to package ``bfio`` using this option,
+    make sure to consider the licensing ramifications.
 
 ~~~~~~~~~~~~~~~~~~~~~
 Download a Test Image
@@ -93,21 +97,21 @@ to use the Python backend:
 The output should be something like this::
     
     TypeError: img_r001_c001.ome.tif is not a tiled tiff. The python backend of
-    the BioReader only supports OME tiled tiffs. Use the java backend to load
+    the BioReader only supports OME tiled tiffs. Use the bioformats backend to load
     this image.
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Manually Specifying a Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Following the error message above, we need to use the ``java`` backend. To do
-this, just use the keyword argument ``backend=java`` when initializing the
+Following the error message above, we need to use the ``bioformats`` backend. To do
+this, just use the keyword argument ``backend=bioformats`` when initializing the
 BioReader.
 
 .. code-block:: python
 
     # Set up the BioReader
-    br = BioReader(PATH / FILENAME,backend='java')
+    br = BioReader(PATH / FILENAME,backend='bioformats')
     
     # Print off some information about the image before loading it
     print('br.shape: {}'.format(br.shape))
@@ -116,16 +120,11 @@ BioReader.
     br.close()
 
 Behind the scenes, what happens is that JPype starts Java and loads the
-BioFormats jar. If Java is not installed, the above code will raise an error.
+Bioformats jar. If Java is not installed, the above code will raise an error.
 
 .. Note::
 
-    To manually start Java and load the necessary jar files, you can call
-    ``import bfio; bfio.start()``. JPype will automatically shut down Java
-    when all Java processes are completed.
-
-    Currently, the mechanism for automatically starting Java is not thread safe.
-    When using ``threading``, make sure to call ``bfio.start()`` first.
+    Currently, the mechanism for starting Java is likely not thread safe.
 
 ~~~~~~~~~~~~~~~~~~~
 Using the BioReader
@@ -142,7 +141,7 @@ into a ``with`` block, which will automatically perform file cleanup.
     from bfio import BioReader
 
     # Initialize the BioReader inside a ``with`` block to handle file cleanup
-    with BioReader(PATH / FILENAME,backend='java') as br:
+    with BioReader(PATH / FILENAME,backend='bioformats') as br:
 
         # Print off some information about the image before loading it
         print('br.shape: {}'.format(br.shape))
@@ -189,7 +188,13 @@ columns of pixels:
     I = br[:100,:100,...]
     I = br[:100:2,:100:2]
 
-    print(I.shape) # Should return (100,100,1,1,1)
+    print(I.shape) # Should return (100,100)
+
+.. note::
+
+    When using NumPy like indexing, trailing dimensions with size=1 are squeezed. So,
+    while ``read`` will always return a 5-dimensional array, the NumPy indexing in this
+    case will return a 2-dimensional array since there are no Z, C, or T dimensions.
 
 ---------------------------------
 Writing Images With the BioWriter
@@ -265,7 +270,7 @@ image and saving it was trivial. However, the ``bfio`` classes can be used to
 to convert an arbitrarily large image on a resource constrained system. This is
 done by reading/writing images in subsections and controlling the number of
 threads used for processing. Both the BioReader and BioWriter use multiple
-threads to read/write data, one thread per tile individual tiles. By default,
+threads to read/write data, one thread per tile on individual tiles. By default,
 the number of threads is half the number of detected CPU cores, and this can be
 changed when a BioReader or BioWriter object is created by using the
 ``max_workers`` keyword argument.
@@ -292,8 +297,8 @@ save it into the tiled tiff format.
     # be a multiple of 1024
     tile_size = tile_grid_size * 1024
 
-    with BioReader(PATH / 'file.czi',backend='java') as br, \
-        BioWriter(PATH / 'out.ome.tif',backend='java',metadata=br.metadata) as bw:
+    with BioReader(PATH / 'file.czi',backend='bioformats') as br, \
+        BioWriter(PATH / 'out.ome.tif',backend='bioformats',metadata=br.metadata) as bw:
     
         # Loop through timepoints
         for t in range(br.T):
@@ -324,12 +329,10 @@ way of converting to tiled tiff.
 
 One thing to note in the above example is that both the BioReader and BioWriter
 are using the Java backend. This ensures a direct, 1-to-1 file conversion can
-take place. The Python backend for both the BioReader and BioWriter require that
-the tiled tiff only contain a single channel and single timepoint, which is a
-restriction imposed by the WIPP platform. Future support of multi-channel and
-multi-timepoints files my be included, but for now ``bfio`` follows the WIPP
-standard. To make the above tiled tiff converter export WIPP compliant files,
-the code should be changed as follows:
+take place. While the Python backend for both the BioReader and BioWriter can read OME
+TIFF files with any number of XYZCT dimensions, the WIPP platform expects each file to
+only contain XYZ data. To make the above tiled tiff converter export WIPP compliant
+files, the code should be changed as follows:
 
 .. code-block:: python
     
@@ -341,7 +344,7 @@ the code should be changed as follows:
     # be a multiple of 1024
     tile_size = tile_grid_size * 1024
 
-    with BioReader(PATH / 'file.czi',backend='java') as br:
+    with BioReader(PATH / 'file.czi',backend='bioformats') as br:
     
         # Loop through timepoints
         for t in range(br.T):
@@ -350,8 +353,10 @@ the code should be changed as follows:
             for c in range(br.C):
             
                 with BioWriter(PATH / 'out_c{c:03d}_t{t:03d}.ome.tif',
-                               backend='java',
+                               backend='bioformats',
                                metadata=br.metadata) as bw:
+                    bw.C = 1
+                    bw.T = 1
 
                     # Loop through z-slices
                     for z in range(br.Z):
@@ -395,7 +400,7 @@ Self Contained Example
 
     """ Convert the tif to tiled tiff """
     # Set up the BioReader
-    with BioReader(PATH / FILENAME,backend='java') as br, \
+    with BioReader(PATH / FILENAME,backend='bioformats') as br, \
         BioWriter(PATH / 'out.ome.tif',metadata=br.metadata,backend='python') as bw:
     
         # Print off some information about the image before loading it
@@ -441,7 +446,7 @@ Scalable Tiled Tiff
     tile_size = tile_grid_size * 1024
     
     # Set up the BioReader
-    with BioReader(PATH,backend='java',max_workers=cpu_count()) as br:
+    with BioReader(PATH,backend='bioformats',max_workers=cpu_count()) as br:
 
         # Loop through timepoints
         for t in range(br.T):
