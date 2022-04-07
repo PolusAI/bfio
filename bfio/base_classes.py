@@ -98,7 +98,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path (typing.Union[str, Path]): Path to output file
             max_workers (typing.Optional[int], optional): Number of threads to be used.
                 Defaults to None.
-            backend (typing.Optional[str], optional): Must be `python`, `java`,
+            backend (typing.Optional[str], optional): Must be `python`, `bioformats`,
                 or `zarr`.If None, attempts to detect type. Defaults to None.
             read_only (typing.Optional[bool], optional): [description].
                 Defaults to True.
@@ -114,24 +114,25 @@ class BioBase(object, metaclass=abc.ABCMeta):
         # validate/set the backend
         if backend is None:
             extension = "".join(self._file_path.suffixes)
-            if extension.endswith(".ome.tif"):
+            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
                 backend = "python"
             elif extension.endswith(".ome.zarr"):
                 backend = "zarr"
             else:
-                backend = "java"
-        elif backend.lower() not in ["python", "java", "zarr"]:
+                backend = "bioformats"
+        elif backend.lower() not in ["python", "bioformats", "zarr"]:
             raise ValueError(
-                'Keyword argument backend must be one of ["python","java","zarr"]'
+                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
             )
         self._backend_name = backend.lower()
 
         # Set the number of workers for multi-threaded loading
-        if self._backend_name == "java" and max_workers is not None:
-            self.logger.warning(
-                "The max_workers keyword was present, but the java backend only "
-                + "operates with a single worker. Setting max_workers=1."
-            )
+        if self._backend_name == "bioformats":
+            if max_workers is not None:
+                self.logger.warning(
+                    "The max_workers keyword was present, but bioformats backend only "
+                    + "operates with a single worker. Setting max_workers=1."
+                )
             self.max_workers = 1
         else:
             self.max_workers = (
@@ -279,25 +280,60 @@ class BioBase(object, metaclass=abc.ABCMeta):
         )
         self._DIMS[dimension.upper()] = value
         if dimension.upper() == "C":
-            self._metadata.images[0].pixels.channels = [
-                ome_types.model.Channel.construct() for _ in range(value)
-            ]
-        self._metadata.image[0].pixels.tiff_data_blocks = [
-            ome_types.model.TiffData.construct() for _ in range(value)
-        ]
+            if len(self._metadata.images[0].pixels.channels) > value:
+                self._metadata.images[0].pixels.channels = self._metadata.images[
+                    0
+                ].pixels.channels[:value]
+            else:
+                for i in range(len(self._metadata.images[0].pixels.channels), value):
+                    self._metadata.images[0].pixels.channels.append(
+                        ome_types.model.Channel(samples_per_pixel=1)
+                    )
 
-        count = 0
-        for z in range(self.Z):
-            for c in range(self.C):
-                for t in range(self.T):
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_z = z
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_c = c
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].first_t = t
-                    self._metadata.images[0].pixels.tiff_data_blocks[count].ifd = count
-                    self._metadata.images[0].pixels.tiff_data_blocks[
-                        count
-                    ].plane_count = 1
-                    count += 1
+        if len(self._metadata.images[0].pixels.planes) != (self.Z * self.C * self.T):
+            original_planes = self._metadata.images[0].pixels.planes
+            planes = []
+            for t in range(self.T):
+                index = t
+
+                tp = []
+                # Try to preserve timeslice plane metadata
+                tp = [p for p in original_planes if p.the_t == t]
+
+                for c in range(self.C):
+                    index *= self.C + c
+
+                    cp = [c for c in tp if c.the_c == c]
+
+                    for z in range(self.Z):
+                        index *= self.Z + z
+
+                        zp = [z for z in cp if z.the_z == z]
+
+                        # If a place coordinate matches, use that
+                        if len(zp) > 0:
+                            zp = zp[0]
+
+                        # If no z-match could be found, find a channel match and modify
+                        elif len(cp) > 0:
+
+                            zp = ome_types.model.Plane(**cp[0].dict())
+                            zp.the_z = z
+
+                        # If no channel match, try to find a timepoint match and modify
+                        elif len(tp) > 0:
+
+                            zp = ome_types.model.Plane(**tp[0].dict())
+                            zp.the_c = c
+                            zp.the_z = z
+
+                        # As a last resort, create a plane from scratch
+                        else:
+                            zp = ome_types.model.Plane(the_z=z, the_c=c, the_t=t)
+
+                        planes.append(zp)
+
+            self._metadata.images[0].pixels.planes = planes
 
     """ ------------------------------ """
     """ -Get/Set Dimension Properties- """
@@ -307,7 +343,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
     def channel_names(self) -> typing.List[str]:
         """Get the channel names for the image."""
         image = self._metadata.images[0]
-        return [image.pixels.channels[0].name for i in range(self.C)]
+        return [c.name for c in image.pixels.channels]
 
     @channel_names.setter
     def channel_names(self, cnames: typing.List[str]):
@@ -315,10 +351,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for i in range(0, len(cnames)):
-            self._metadata.image[0].pixels.channels[i].Name = (
-                "" if cnames[i] is None else cnames[i]
-            )
+        for channel, cname in (self.metadata.images[0].pixels.channels, cnames):
+            channel.name = cname
 
     @property
     def shape(self) -> typing.Tuple[int, int, int, int, int]:
@@ -337,8 +371,13 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     @shape.setter
     def shape(self, new_shape: typing.Tuple[int, int, int, int, int]):
-        assert len(new_shape) == 5
+        assert not self._read_only, self._READ_ONLY_MESSAGE.format("cnames")
         for s, d in zip(new_shape, "yxzct"):
+            if d in "ct" and self._backend_name == "python" and s > 1:
+                raise ValueError(
+                    "The BioWriter with 'python' backend can only write "
+                    + "1 timeslice/channel images."
+                )
             setattr(self, d, s)
 
     @property
@@ -511,7 +550,10 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def dtype(self) -> numpy.dtype:
         """The numpy pixel type of the data."""
-        return self._DTYPE[self._metadata.images[0].pixels.type.value]
+        dtype = numpy.dtype(self._DTYPE[self._metadata.images[0].pixels.type.value])
+        return dtype.newbyteorder(
+            ">" if self.metadata.images[0].pixels.big_endian else "<"
+        )
 
     @dtype.setter
     def dtype(self, dtype):
@@ -527,7 +569,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
                 self._metadata.images[
                     0
                 ].pixels.type = ome_types.model.simple_types.PixelType(k)
-                return
 
     @property
     def samples_per_pixel(self) -> int:
@@ -536,9 +577,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     @samples_per_pixel.setter
     def samples_per_pixel(self, samples_per_pixel: int):
-        self._metadata.images[0].pixels.channels[
-            0
-        ].samples_per_pixel = samples_per_pixel
+        for channel in self._metadata.images[0].pixels.channels:
+            channel.samples_per_pixel = samples_per_pixel
 
     @property
     def spp(self):

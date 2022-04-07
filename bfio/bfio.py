@@ -8,12 +8,11 @@ from pathlib import Path
 import numpy
 import ome_types
 
-from bfio import JARS, LOGBACK, backends
+from bfio import backends
 from bfio.base_classes import BioBase
 
 try:
-    import jpype
-    import jpype.imports
+    from bioformats_jar import get_loci
 
     def start() -> str:
         """Start the jvm.
@@ -24,18 +23,10 @@ try:
         Return:
             The Bio-Formats JAR version.
         """
-        if jpype.isJVMStarted():
-            from loci.formats import FormatTools
 
-            JAR_VERSION = FormatTools.VERSION
-            return JAR_VERSION
-
-        logging.getLogger("bfio.start").info("Starting the jvm.")
-        jpype.startJVM(f"-Dlogback.configurationFile={LOGBACK}", classpath=JARS)
-
-        from loci.formats import FormatTools
-
-        JAR_VERSION = FormatTools.VERSION
+        global JAR_VERSION
+        loci = get_loci()
+        JAR_VERSION = loci.formats.FormatTools.VERSION
 
         logging.getLogger("bfio.start").info(
             "bioformats_package.jar version = {}".format(JAR_VERSION)
@@ -56,15 +47,15 @@ class BioReader(BioBase):
     any Bioformats supported file format, but is specially optimized for
     handling the OME tiled tiff format.
 
-    There are three backends: ``java``, ``python``, and ``zarr``. The ``java``
-    backend directly uses Bio-Formats for file reading, and can read any format
-    that is supported by Bio-Formats. The ``python`` backend will only read
+    There are three backends: ``bioformats``, ``python``, and ``zarr``. The
+    ``bioformats`` backend directly uses Bio-Formats for file reading, and can read any
+    forma that is supported by Bio-Formats. The ``python`` backend will only read
     images in OME Tiff format with tile tags set to 1024x1024, and is
-    significantly faster than the "java" backend for reading these types of tiff
+    significantly faster than the "bioformats" backend for reading these types of tiff
     files. The ``zarr`` backend will only read OME Zarr files.
 
     File reading and writing are multi-threaded by default, except for the
-    ``java`` backend which does not currently support threading. Half of the
+    ``bioformats`` backend which does not currently support threading. Half of the
     available CPUs detected by multiprocessing.cpu_count() are used to read
     an image.
 
@@ -72,10 +63,20 @@ class BioReader(BioBase):
     https://www.openmicroscopy.org/bio-formats/
 
     Note:
-        In order to use the ``java`` backend, jpype must be installed.
+        In order to use the ``bioformats`` backend, jpype must be installed.
     """
 
     logger = logging.getLogger("bfio.bfio.BioReader")
+    _STATE_DICT = [
+        "_metadata",
+        "_DIMS",
+        "_file_path",
+        "max_workers",
+        "_backend_name",
+        "clean_metadata",
+        "_read_only",
+        "_backend",
+    ]
 
     def __init__(
         self,
@@ -90,7 +91,7 @@ class BioReader(BioBase):
             file_path: Path to file to read
             max_workers: Number of threads used to read and image. *Default is
                 half the number of detected cores.*
-            backend: Can be ``python``, ``java``, or ``zarr``. If None, then
+            backend: Can be ``python``, ``bioformats``, or ``zarr``. If None, then
                 BioReader will try to autodetect the proper backend.
                 *Default is python.*
             clean_metadata: Will try to reformat poorly formed OME XML metadata if True.
@@ -105,10 +106,27 @@ class BioReader(BioBase):
         self.clean_metadata = clean_metadata
 
         # Ensure backend is supported
+        self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
-        elif self._backend_name == "java":
-            self._backend = backends.JavaReader(self)
+        elif self._backend_name == "bioformats":
+            try:
+                self._backend = backends.JavaReader(self)
+            except Exception as err:
+                if repr(err).split("(")[0] in [
+                    "UnknownFormatException",
+                    "MissingLibraryException",
+                ]:
+                    self.logger.error(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                    raise TypeError(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                else:
+                    raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrReader(self)
 
@@ -119,13 +137,30 @@ class BioReader(BioBase):
                     + "To change back, set the object property."
                 )
         else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
+            raise ValueError('backend must be "python", "bioformats", or "zarr"')
+        self.logger.debug("Finished initializing the backend.")
 
         # Preload the metadata
         self._metadata = self._backend.read_metadata()
 
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
+
+    def __getstate__(self) -> typing.Dict:
+
+        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+
+        return state_dict
+
+    def __setstate__(self, state) -> None:
+
+        assert all(n in self._STATE_DICT for n in state.keys())
+        assert all(n in state.keys() for n in self._STATE_DICT)
+
+        for k, v in state.items():
+            setattr(self, k, v)
+
+        self._backend.frontend = self
 
     def __getitem__(self, keys: typing.Union[tuple, slice]) -> numpy.ndarray:
         """Image loading using numpy-like indexing.
@@ -224,15 +259,65 @@ class BioReader(BioBase):
         Y_tile_shape = Y_tile_end - Y_tile_start
         Z_tile_shape = Z[1] - Z[0]
 
-        # Initialize the output
-        output = numpy.zeros(
-            [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)], dtype=self.dtype
-        )
+        # Determine if enough planes will be loaded to benefit from tiling
+        # There is a tradeoff between fast storing tiles and reshaping later versus
+        # slow storing tiles without reshaping.
+        # fast storing tiles is aligned memory, where slow storing is unaligned
+        load_tiles = 10 * (
+            X_tile_shape * Y_tile_shape / 1024**2 + 1
+        ) < Z_tile_shape * len(C) * len(T)
+
+        # Initialize the output for zarr and bioformats
+        if self._backend_name != "python":
+            output = numpy.zeros(
+                [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)],
+                dtype=self.dtype,
+            )
+
+        # Initialize the output for python
+        # We use a different matrix shape for loading images to reduce memory copy time
+        # TODO: Should use this same scheme for the other readers to reduce copy times
+        else:
+            if load_tiles:
+                y_tile = min(Y[1] - Y[0], 1024)
+                x_tile = min(X[1] - X[0], 1024)
+                output = numpy.zeros(
+                    [
+                        Z_tile_shape,
+                        len(C),
+                        len(T),
+                        Y_tile_shape // 1024,
+                        X_tile_shape // 1024,
+                        y_tile,
+                        x_tile,
+                    ],
+                    dtype=self.dtype,
+                    order="C",
+                )
+            else:
+                output = numpy.zeros(
+                    [Z_tile_shape, len(C), len(T), Y[1] - Y[0], X[1] - X[0]],
+                    dtype=self.dtype,
+                    order="C",
+                )
 
         # Read the image
+        self._backend.load_tiles = load_tiles
         self._backend.read_image(
             [X_tile_start, X_tile_end], [Y_tile_start, Y_tile_end], Z, C, T, output
         )
+
+        # Reshape the arrays into expected format
+        if self._backend_name == "python":
+            if load_tiles:
+                output = output.transpose(3, 5, 4, 6, 0, 1, 2)
+                X_tile_shape = X_tile_shape if x_tile == 1024 else X[1] - X[0]
+                Y_tile_shape = Y_tile_shape if y_tile == 1024 else Y[1] - Y[0]
+                output = output.reshape(
+                    Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
+                )
+            else:
+                output = output.transpose(3, 4, 0, 1, 2)
 
         output = output[
             Y[0] - Y_tile_start : Y[1] - Y_tile_start,
@@ -779,7 +864,7 @@ class BioWriter(BioBase):
     https://www.openmicroscopy.org/bio-formats/
 
     Note:
-        In order to use the ``java`` backend, jpype must be installed.
+        In order to use the ``bioformats`` backend, jpype must be installed.
     """
 
     logger = logging.getLogger("bfio.bfio.BioWriter")
@@ -799,7 +884,7 @@ class BioWriter(BioBase):
             file_path: Path to file to read
             max_workers: Number of threads used to read and image. *Default is
                 half the number of detected cores.*
-            backend: Must be ``python`` or ``java``. *Default is python.*
+            backend: Must be ``python`` or ``bioformats``. *Default is python.*
             metadata: This directly sets the ome tiff metadata using the OMEXML
                 class if specified. *Defaults to None.*
             image: The metadata will be set based on the dimensions and data
@@ -818,12 +903,12 @@ class BioWriter(BioBase):
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = ome_types.from_xml(ome_types.to_xml(metadata))
-            self._metadata.images[0].Name = self._file_path.name
-            self._metadata.images[0].Pixels.channel_count = self.C
-            self._metadata.image[
+            self._metadata = metadata.copy(deep=True)
+
+            self._metadata.images[0].name = self._file_path.name
+            self._metadata.images[
                 0
-            ].Pixels.DimensionOrder = ome_types.model.Pixels.dimension_order.XYZCT
+            ].pixels.dimension_order = ome_types.model.pixels.DimensionOrder.XYZCT
         else:
             self._metadata = self._minimal_xml()
 
@@ -843,27 +928,27 @@ class BioWriter(BioBase):
         # Ensure backend is supported
         if self._backend_name == "python":
             self._backend = backends.PythonWriter(self)
-        elif self._backend_name == "java":
+        elif self._backend_name == "bioformats":
             self._backend = backends.JavaWriter(self)
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrWriter(self)
         else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
+            raise ValueError('backend must be "python", "bioformats", or "zarr"')
 
         if not self._file_path.name.endswith(
             ".ome.tif"
         ) and not self._file_path.name.endswith(".ome.tif"):
             ValueError("The file extension must be .ome.tif or .ome.zarr")
 
-        if self.metadata.image_count > 1:
+        if len(self.metadata.images) > 1:
             self.logger.warning(
                 "The BioWriter only writes single image "
                 + "files, but the metadata has {} images. ".format(
-                    self.metadata.image_count
+                    len(self.metadata.images)
                 )
                 + "Setting the number of images to 1."
             )
-            self.metadata.image_count = 1
+            self.metadata.images = self.metadata.images[:1]
 
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
@@ -924,19 +1009,17 @@ class BioWriter(BioBase):
                 if value.shape[i] != getattr(self, d):
                     raise IndexError(
                         "Shape of image {} does not match the ".format(value.shape)
-                        + "save dimensions {}.".format(
-                            (s[1] - s[0] for s in ind.values())
-                        )
+                        + "save dimensions {}.".format(ind)
                     )
             elif d in "YXZ" and ind[d][1] - ind[d][0] != value.shape[i]:
                 raise IndexError(
                     "Shape of image {} does not match the ".format(value.shape)
-                    + "save dimensions {}.".format((s[1] - s[0] for s in ind.values()))
+                    + "save dimensions {}.".format(ind)
                 )
             elif d in "CT" and len(ind[d]) != value.shape[i]:
                 raise IndexError(
                     "Shape of image {} does not match the ".format(value.shape)
-                    + "save dimensions {}.".format((s[1] - s[0] for s in ind.values()))
+                    + "save dimensions {}.".format(ind)
                 )
             elif d in "YXZ":
                 ind[d] = ind[d][0]
@@ -952,18 +1035,30 @@ class BioWriter(BioBase):
         assert (
             not self._read_only
         ), "The image has started to be written. To modify the xml again, reinitialize."
-        omexml = ome_types.model.OME.construct()
-        omexml.image[0].name = Path(self._file_path).name
-        p = omexml.image[0].pixels
-
-        assert isinstance(p, ome_types.model.Pixels)
-
-        for d in "xyzct":
-            setattr(p, "size_{}".format(d), 1)
-
-        p.dimension_order = ome_types.model.Pixels.dimension_order.XYZCT
-        p.type = ome_types.model.simple_types.UINT8
-        p.channel_count = 1
+        omexml = ome_types.model.OME()
+        omexml.images.append(
+            ome_types.model.Image(
+                id="Image:0",
+                pixels=ome_types.model.Pixels(
+                    id="Pixels:0",
+                    dimension_order="XYZCT",
+                    big_endian=False,
+                    size_c=1,
+                    size_z=1,
+                    size_t=1,
+                    size_x=1,
+                    size_y=1,
+                    channels=[
+                        ome_types.model.Channel(
+                            id="Channel:0",
+                            samples_per_pixel=1,
+                        )
+                    ],
+                    type=ome_types.model.simple_types.PixelType.UINT8,
+                    tiff_data_blocks=[ome_types.model.TiffData()],
+                ),
+            )
+        )
 
         return omexml
 
@@ -1386,7 +1481,7 @@ try:
 
             # If the backend is wrong, fall back to BioFormats
             except ValueError:
-                self.br = BioReader(file, backend="java")
+                self.br = BioReader(file, backend="bioformats")
 
             # Raise an error if the data type is unrecognized by BioFormats/bfio
             numpy.iinfo(self.br.dtype).min

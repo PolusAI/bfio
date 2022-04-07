@@ -8,6 +8,7 @@ TEST_IMAGES = {
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
     "img_r001_c001.ome.tif": "https://github.com/usnistgov/WIPP/raw/master/data/PyramidBuilding/inputCollection/img_r001_c001.ome.tif",
+    "Leica-1.scn": "https://downloads.openmicroscopy.org/images/Leica-SCN/openslide/Leica-1/Leica-1.scn",
 }
 
 TEST_DIR = pathlib.Path(__file__).with_name("data")
@@ -82,8 +83,8 @@ class TestSimpleRead(unittest.TestCase):
 
             np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
 
-    def test_java(self):
-        """test_java - Fails if Java/JPype improperly configured"""
+    def test_bioformats(self):
+        """test_bioformats - Fails if Java/JPype improperly configured"""
 
         bfio.start()
 
@@ -99,7 +100,7 @@ class TestSimpleRead(unittest.TestCase):
             TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
         ) as br:
 
-            self.assertEqual(br._backend_name, "java")
+            self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
 
@@ -114,10 +115,10 @@ class TestSimpleRead(unittest.TestCase):
             assert br.dtype == I.dtype
 
     def test_read_tif_strip_auto(self):
-        """test_read_tif_strip_auto - Read tiff saved in strips, should load java backend"""
+        """test_read_tif_strip_auto - Read tiff saved in strips, should load bioformats backend"""
         with bfio.BioReader(TEST_DIR.joinpath("0.tif")) as br:
 
-            self.assertEqual(br._backend_name, "java")
+            self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
 
@@ -138,13 +139,13 @@ class TestSimpleRead(unittest.TestCase):
 
             I = br[:]
 
-    def test_read_tif_strip_java(self):
-        """test_read_tif_strip_java - Read tiff using Java backend"""
+    def test_read_tif_strip_bioformats(self):
+        """test_read_tif_strip_bioformats - Read tiff using Java backend"""
         with bfio.BioReader(
-            TEST_DIR.joinpath("img_r001_c001.ome.tif"), backend="java"
+            TEST_DIR.joinpath("img_r001_c001.ome.tif"), backend="bioformats"
         ) as br:
 
-            self.assertEqual(br._backend_name, "java")
+            self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
 

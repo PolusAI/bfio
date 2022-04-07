@@ -30,18 +30,17 @@ if pathlib.Path(__file__).parent.joinpath("jars").is_dir():
 
     try:
 
-        _jars_dir = pathlib.Path(__file__).parent.joinpath("jars")
+        import bioformats_jar
+
+        _jars_dir = pathlib.Path(bioformats_jar._BFJAR).parent
 
         JAR_VERSION = "Use bfio.start() to get JAR_VERSION."
 
         JARS = [str(_jars_dir.joinpath("bioformats_package.jar").absolute())]
 
-        LOGBACK = str(_jars_dir.joinpath("logback.xml").absolute())
-
     except ModuleNotFoundError:
         JAR_VERSION = None
         JARS = None
-        LOGBACK = None
         logger.info(
             "jpype has not been installed. "
             + "Can only use Python backend for reading/writing images."

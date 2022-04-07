@@ -4,9 +4,10 @@ import io
 import logging
 import shutil
 import struct
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional, List, Tuple
+import threading
 
 # Third party packages
 import imagecodecs
@@ -15,6 +16,7 @@ import ome_types
 import re
 from tifffile import tifffile
 from xmlschema.validators.exceptions import XMLSchemaValidationError
+from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -342,13 +344,20 @@ class PythonReader(bfio.base_classes.AbstractReader):
     logger = logging.getLogger("bfio.backends.PythonReader")
 
     _rdr: tifffile.TiffFile = None
+    _offsets_bytes = None
+    _STATE_DICT = ["_metadata", "frontend"]
 
     def __init__(self, frontend):
         super().__init__(frontend)
 
         self.logger.debug("__init__(): Initializing _rdr (tifffile.TiffFile)...")
         self._rdr = tifffile.TiffFile(self.frontend._file_path)
-        self.read_metadata()
+        if self._rdr.ome_metadata is None:
+            raise TypeError(
+                "No OME metadata detected, use the java backend to read this file."
+            )
+        else:
+            self.read_metadata()
         width = self._metadata.images[0].pixels.size_x
         height = self._metadata.images[0].pixels.size_y
 
@@ -388,6 +397,36 @@ class PythonReader(bfio.base_classes.AbstractReader):
                     )
                     + "backend to read this image."
                 )
+        elif self._metadata.images[0].pixels.dimension_order.value != "XYZCT":
+            raise TypeError(
+                "The dimension order of the data is not XYZCT. "
+                + "Use the java backend to read this image."
+            )
+        elif self._metadata.images[0].pixels.interleaved:
+            raise TypeError(
+                "The data is RGB interleaved and cannot be read by the PythonReader. "
+                + "Use the java backend to read this image."
+            )
+
+        # Close the reader until we need it
+        self._rdr.filehandle.close()
+
+    def __getstate__(self) -> Dict:
+
+        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+        state_dict.update({"file_path": self.frontend._file_path})
+
+        return state_dict
+
+    def __setstate__(self, state) -> None:
+
+        for k, v in state.items():
+            if k == "file_path":
+                self._lock = threading.Lock()
+                self._rdr = tifffile.TiffFile(v)
+                self._rdr.filehandle.close()
+            else:
+                setattr(self, k, v)
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
@@ -395,11 +434,20 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
 
             try:
-                self._metadata = ome_types.from_xml(self._rdr.ome_metadata)
-            except XMLSchemaValidationError:
+                self._metadata = ome_types.from_xml(
+                    self._rdr.ome_metadata,
+                    # Uncomment this when ome_types releases a new version
+                    # https://github.com/tlambert03/ome-types/pull/127
+                    # validate=True,
+                )
+            except (XMLSchemaValidationError, XMLSchemaValidateError):
                 if self.frontend.clean_metadata:
+                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
-                        clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
+                        cleaned,
+                        # Uncomment this when ome_types releases a new version
+                        # https://github.com/tlambert03/ome-types/pull/127
+                        # validate=True,
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -409,12 +457,87 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         return self._metadata
 
-    def _chunk_indices(self, X, Y, Z):
+    class _TiffBytesOffsets(tifffile.TiffFrame):
+        def __init__(self, parent, index):
 
-        self.logger.debug("_chunk_indices(): (X,Y,Z) -> ({},{},{})".format(X, Y, Z))
-        assert len(X) == 2
-        assert len(Y) == 2
-        assert len(Z) == 2
+            self.index = index
+
+            self.parent = parent
+
+            self.dataoffsets = ()
+            self.databytecounts = ()
+
+            fh = self.parent.filehandle
+            self.offset = fh.tell()
+            for code, tag in self._gettags({324, 325}):
+                if code == 324:
+                    self.dataoffsets = tag.value
+                elif code == 325:
+                    self.databytecounts = tag.value
+
+            # get the next offset
+            tiff = self.parent.tiff
+            fh.seek(self.offset)
+            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
+            fh.seek(self.offset + tiff.tagnosize + tagno * tiff.tagsize)
+            self.next_offset = struct.unpack(
+                tiff.offsetformat, fh.read(tiff.offsetsize)
+            )[0]
+
+        def _gettags(self, codes={324, 325}):
+            """Return list of (code, TiffTag) from file."""
+            fh = self.parent.filehandle
+            tiff = self.parent.tiff
+            unpack = struct.unpack
+            tags = []
+
+            tagno = unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
+
+            tagoffset = self.offset + tiff.tagnosize  # fh.tell()
+            tagsize = tiff.tagsize
+            codeformat = tiff.tagformat1[:2]
+            tagbytes = fh.read(tagsize * tagno)
+
+            have_one_tag = False
+            for tagindex in reversed(range(0, tagno * tagsize, tagsize)):
+                code = unpack(codeformat, tagbytes[tagindex : tagindex + 2])[0]
+                if code not in codes:
+                    continue
+                tag = tifffile.TiffTag.fromfile(
+                    self.parent,
+                    tagoffset + tagindex,
+                    tagbytes[tagindex : tagindex + tagsize],
+                )
+                tags.append((code, tag))
+                if have_one_tag:
+                    break
+                else:
+                    have_one_tag = True
+
+            return tags
+
+    def _page_offsets_bytes(self, index: int):
+
+        if index == 0:
+            return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
+
+        parent = self._rdr
+
+        if self._offsets_bytes is None or self._offsets_bytes.index + 1 != index:
+            self._rdr.pages._seek(int(index))
+        else:
+            self._rdr.filehandle.seek(self._offsets_bytes.next_offset)
+
+        obc = self._TiffBytesOffsets(parent, index)
+        self._offsets_bytes = obc
+
+        return obc.dataoffsets, obc.databytecounts
+
+    def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
+
+        self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
+        assert all(len(D) == 2 for D in [X, Y, Z])
+        assert all(isinstance(D, list) for D in [C, T])
 
         offsets = []
         bytecounts = []
@@ -424,22 +547,23 @@ class PythonReader(bfio.base_classes.AbstractReader):
         x_tiles = numpy.arange(X[0] // ts, numpy.ceil(X[1] / ts), dtype=int)
         y_tile_stride = numpy.ceil(self.frontend.x / ts).astype(int)
 
-        self.logger.debug("_chunk_indices(): x_tiles = {}".format(x_tiles))
-        self.logger.debug("_chunk_indices(): y_tile_stride = {}".format(y_tile_stride))
+        for t in T:
+            t_index = self.frontend.Z * self.frontend.C * t
+            for c in C:
+                c_index = t_index + self.frontend.Z * c
+                for z in range(Z[0], Z[1]):
+                    index = z + c_index
 
-        for z in range(Z[0], Z[1]):
-            for y in range(Y[0] // ts, int(numpy.ceil(Y[1] / ts))):
-                y_offset = int(y * y_tile_stride)
-                ind = (x_tiles + y_offset).tolist()
+                    dataoffsets, databytecounts = self._page_offsets_bytes(index)
+                    for y in range(Y[0] // ts, int(numpy.ceil(Y[1] / ts))):
+                        y_offset = int(y * y_tile_stride)
+                        ind = (x_tiles + y_offset).tolist()
 
-                o = [self._rdr.pages[z].dataoffsets[i] for i in ind]
-                b = [self._rdr.pages[z].databytecounts[i] for i in ind]
+                        o = [dataoffsets[i] for i in ind]
+                        b = [databytecounts[i] for i in ind]
 
-                self.logger.debug("_chunk_indices(): offsets = {}".format(o))
-                self.logger.debug("_chunk_indices(): bytecounts = {}".format(b))
-
-                offsets.extend(o)
-                bytecounts.extend(b)
+                        offsets.extend(o)
+                        bytecounts.extend(b)
 
         return offsets, bytecounts
 
@@ -448,7 +572,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
         keyframe = self._keyframe
         out = self._image
 
-        w, l, d, _, _ = self._tile_indices[args[1]]
+        w, l, d, c, t = self._tile_indices[args[1]]
 
         # copy decoded segments to output array
         segment, _, shape = keyframe.decode(*args)
@@ -461,38 +585,256 @@ class PythonReader(bfio.base_classes.AbstractReader):
             "_process_chunk(): (w,l,d) = {},{},{}".format(w[0], l[0], d[0])
         )
 
-        out[
-            l[0] : l[0] + shape[1], w[0] : w[0] + shape[2], d[0], 0, 0
-        ] = segment.squeeze()
+        width = min(keyframe.imagewidth - w[1], self._TILE_SIZE[1])
+        height = min(keyframe.imagelength - l[1], self._TILE_SIZE[0])
+
+        if self.load_tiles:
+            out[
+                d[0], c[0], t[0], l[0] // 1024, w[0] // 1024, :height, :width
+            ] = segment[0, :height, :width, 0]
+        else:
+            out[d[0], c[0], t[0], l[0] : l[0] + height, w[0] : w[0] + width] = segment[
+                0, :height, :width, 0
+            ]
 
     def _read_image(self, X, Y, Z, C, T, output):
-        if (len(C) > 1 and C[0] != 0) or (len(T) > 0 and T[0] != 0):
-            self.logger.warning(
-                "More than channel 0 was specified for channel or timepoint data."
-                + "The Python backend will load only the first channel/timepoint."
-            )
 
         # Get keyframe
         self._keyframe = self._rdr.pages[0].keyframe
+
+        # Open the file
         fh = self._rdr.pages[0].parent.filehandle
+        fh.open()
+
+        # Set tile size if request size is < _TILE_SIZE for efficiency
+        self._TILE_SIZE = (
+            min(self._image.shape[-2], self.frontend._TILE_SIZE),
+            min(self._image.shape[-1], self.frontend._TILE_SIZE),
+        )
 
         # Get binary data info
-        offsets, bytecounts = self._chunk_indices(X, Y, Z)
+        offsets, bytecounts = self._chunk_indices(X, Y, Z, C, T)
 
         self.logger.debug("read_image(): _tile_indices = {}".format(self._tile_indices))
 
         if self.frontend.max_workers > 1:
             with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-                executor.map(self._process_chunk, fh.read_segments(offsets, bytecounts))
+                # cast to list so that any read errors are raised
+                list(
+                    executor.map(
+                        self._process_chunk, fh.read_segments(offsets, bytecounts)
+                    )
+                )
         else:
             for args in fh.read_segments(offsets, bytecounts):
                 self._process_chunk(args)
 
+        # Close the file
+        fh.close()
+
     def close(self):
-        self._rdr.close()
+        if self._rdr is not None:
+            self._rdr.close()
 
     def __del__(self):
         self.close()
+
+
+class TiffIFDHeader:
+
+    databyteoffsets: List[int]
+    databytecounts: List[int]
+    dataoffsetsoffset: Tuple
+    databytecountsoffset: Tuple
+    ifd: io.BytesIO
+    ifdoffset: int
+    ifdsize: int = 0
+    descriptionoffset: int
+    descriptionlenoffset: int
+    _ifdstart: int = 8
+    _ifdpos = 0
+    _value = None
+
+    def __init__(
+        self, tile_count: int, bytecountformat: str, offsetformat: str, byteorder: str
+    ):
+
+        self.databyteoffsets = [0 for _ in range(tile_count)]
+        self.databytecounts = [0 for _ in range(tile_count)]
+        self.bytecountformat = bytecountformat
+        self.ifd = io.BytesIO()
+        self.offsetformat = offsetformat
+        self.byteorder = byteorder
+
+    def _pack(self, fmt, *val):
+        if fmt[0] not in "<>":
+            fmt = self.byteorder + fmt
+        return struct.pack(fmt, *val)
+
+    def getvalue(self):
+
+        if self._value is None:
+
+            offsetformat = self.offsetformat
+            bytecountformat = self.bytecountformat
+
+            # update strip/tile offsets
+            offset, pos = self.dataoffsetsoffset
+            self.ifd.seek(offset)
+            if pos is not None:
+                self.ifd.write(self._pack(offsetformat, self._ifdstart + pos))
+                self.ifd.seek(pos)
+                for size in self.databyteoffsets:
+                    self.ifd.write(self._pack(offsetformat, size))
+            else:
+                self.ifd.write(self._pack(offsetformat, self.databyteoffsets[0]))
+
+            # update strip/tile bytecounts
+            offset, pos = self.databytecountsoffset
+            self.ifd.seek(offset)
+            if pos:
+                self.ifd.write(self._pack(offsetformat, self._ifdstart + pos))
+                self.ifd.seek(pos)
+            self.ifd.write(self._pack(bytecountformat, *self.databytecounts))
+
+            self._value = self.ifd.getvalue()
+
+        return self._value
+
+    def set_next_ifd(self, pos):
+
+        self.ifd.seek(self.ifdoffset)
+        self.ifd.write(self._pack(self.offsetformat, pos))
+        self.ifd.seek(self.ifdsize)
+
+
+class TiffIFDHeaders(object):
+
+    tags: List[Tuple] = []
+    headers: List[TiffIFDHeader] = []
+    _ifdpos: int = 8
+
+    def __init__(self, writer: "PythonWriter"):
+
+        self.tiff = writer._writer.tiff
+        self.tags = writer._tags
+        self.page_count = writer.frontend.Z * writer.frontend.C * writer.frontend.T
+        self.headers = [
+            TiffIFDHeader(
+                writer._numtiles,
+                writer._bytecountformat,
+                self.tiff.offsetformat,
+                self.tiff.byteorder,
+            )
+            for _ in range(self.page_count)
+        ]
+
+        # Generate the first header
+        self._generate_page(0)
+
+        # remove tags that should be written only once
+        self._tags = self.tags  # backup
+        writer._tags = [tag for tag in writer._tags if not tag[-1]]
+
+        # For multipage tiffs, change the description
+        for ind, tag in enumerate(writer._tags):
+            if tag[0] == 270:
+                del writer._tags[ind]
+                break
+        description = (
+            "ImageJ=\nhyperstack=true\nimages=1\n"
+            + f"channels={writer.frontend.C}\n"
+            + f"slices={writer.frontend.Z}\n"
+            + f"frames={writer.frontend.T}"
+        )
+        writer._addtag(270, "s", 0, description)  # Description
+        self.tags = sorted(writer._tags, key=lambda x: x[0])
+
+        for i in range(1, self.page_count):
+            self._generate_page(i)
+
+        # Set next ifd to the start of the file, indicating the last page
+        self.headers[-1].set_next_ifd(0)
+
+    def _pack(self, fmt, *val):
+        if fmt[0] not in "<>":
+            fmt = self.tiff.byteorder + fmt
+        return struct.pack(fmt, *val)
+
+    def __getitem__(self, index):
+
+        return self.headers[index]
+
+    def _generate_page(self, index):
+
+        tagnoformat = self.tiff.tagnoformat
+        offsetformat = self.tiff.offsetformat
+        offsetsize = self.tiff.offsetsize
+        tagsize = self.tiff.tagsize
+        tagbytecounts = 325
+        tagoffsets = 324
+        tags = self.tags
+
+        # create IFD in memory, do not write to disk
+        header = self.headers[index]
+        header._ifdstart = self._ifdpos
+        header.ifd.write(self._pack(tagnoformat, len(tags)))
+        tagoffset = header.ifd.tell()
+        header.ifd.write(b"".join(t[1] for t in tags))
+        header.ifdoffset = header.ifd.tell()
+        header.ifd.write(self._pack(offsetformat, 0))  # offset to next IFD
+
+        # write tag values and patch offsets in ifdentries
+        for tagindex, tag in enumerate(tags):
+            offset = tagoffset + tagindex * tagsize + offsetsize + 4
+            code = tag[0]
+            value = tag[2]
+
+            if value:
+                pos = header.ifd.tell()
+
+                if pos % 2:
+                    # tag value is expected to begin on word boundary
+                    header.ifd.write(b"\0")
+                    pos += 1
+                header.ifd.seek(offset)
+                header.ifd.write(self._pack(offsetformat, self._ifdpos + pos))
+                header.ifd.seek(pos)
+                header.ifd.write(value)
+
+                if code == tagoffsets:
+                    header.dataoffsetsoffset = offset, pos
+
+                elif code == tagbytecounts:
+                    header.databytecountsoffset = offset, pos
+
+                elif code == 270 and value.endswith(b"\0\0\0\0"):
+                    # image description buffer
+                    header.descriptionoffset = self._ifdpos + pos
+                    header.descriptionlenoffset = (
+                        self._ifdpos + tagoffset + tagindex * tagsize + 4
+                    )
+
+            elif code == tagoffsets:
+                header.dataoffsetsoffset = offset, None
+
+            elif code == tagbytecounts:
+                header.databytecountsoffset = offset, None
+
+        header.ifdsize = header.ifd.tell()
+        if header.ifdsize % 2:
+            header.ifd.write(b"\0")
+            header.ifdsize += 1
+
+        self._ifdpos += header.ifdsize
+        header._ifdpos = self._ifdpos
+
+        # Update the next ifd reference
+        header.set_next_ifd(self._ifdpos)
+
+    def __len__(self):
+
+        return sum(self[i].ifdsize for i in range(len(self.headers)))
 
 
 class PythonWriter(bfio.base_classes.AbstractWriter):
@@ -502,25 +844,13 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
     logger = logging.getLogger("bfio.backends.PythonWriter")
 
     def __init__(self, frontend):
+
         super().__init__(frontend)
 
-        if self.frontend.C > 1:
-            self.logger.warning(
-                "The BioWriter only writes single channel "
-                + "images, but the metadata has {} channels. ".format(self.frontend.C)
-                + "Setting the number of channels to 1."
-            )
-            self.frontend.C = 1
-        if self.frontend.T > 1:
-            self.logger.warning(
-                "The BioWriter only writes single timepoint "
-                + "images, but the metadata has {} timepoints. ".format(self.frontend.T)
-                + "Setting the number of timepoints to 1."
-            )
-            self.frontend.T = 1
-
     def _pack(self, fmt, *val):
-        return struct.pack(self._byteorder + fmt, *val)
+        if fmt[0] not in "<>":
+            fmt = self._writer.tiff.byteorder + fmt
+        return struct.pack(fmt, *val)
 
     def _addtag(self, code, dtype, count, value, writeonce=False):
         tags = self._tags
@@ -530,70 +860,102 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         if not isinstance(code, int):
             code = tifffile.TIFF.TAGS[code]
         try:
-            tifftype = tifffile.TIFF.DATA_DTYPES[dtype]
+            datatype = dtype
+            dataformat = tifffile.TIFF.DATA_FORMATS[datatype][-1]
         except KeyError as exc:
-            raise ValueError(f"unknown dtype {dtype}") from exc
-        rawcount = count
+            try:
+                dataformat = dtype
+                if dataformat[0] in "<>":
+                    dataformat = dataformat[1:]
+                datatype = tifffile.TIFF.DATA_DTYPES[dataformat]
+            except (KeyError, TypeError):
+                raise ValueError(f"unknown dtype {dtype}") from exc
+        del dtype
 
-        if dtype == "s":
-            # strings; enforce 7-bit ASCII on unicode strings
+        rawcount = count
+        if datatype == 2:
+            # string
+            if isinstance(value, str):
+                if code != 270:
+                    # enforce 7-bit ASCII on Unicode strings
+                    try:
+                        value = value.encode("ascii")
+                    except UnicodeEncodeError as exc:
+                        raise ValueError("TIFF strings must be 7-bit ASCII") from exc
+                else:
+                    # OME description must be utf-8, which breaks tiff spec
+                    value = value.encode()
+            elif not isinstance(value, bytes):
+                raise ValueError("TIFF strings must be 7-bit ASCII")
+            if len(value) == 0 or value[-1] != b"\x00":
+                value += b"\x00"
+            count = len(value)
             if code == 270:
-                value = tifffile.bytestr(value, "utf-8") + b"\0"
+                self._descriptiontag = tifffile.TiffTag(self, 0, 270, 2, count, None, 0)
+                rawcount = value.find(b"\x00\x00")
+                if rawcount < 0:
+                    rawcount = count
+                else:
+                    # length of string without buffer
+                    rawcount = max(self._writer.tiff.offsetsize + 1, rawcount + 1)
+                    rawcount = min(count, rawcount)
             else:
-                value = tifffile.bytestr(value, "ascii") + b"\0"
-            count = rawcount = len(value)
-            rawcount = value.find(b"\0\0")
-            if rawcount < 0:
                 rawcount = count
-            else:
-                rawcount += 1  # length of string without buffer
             value = (value,)
+
         elif isinstance(value, bytes):
             # packed binary data
-            dtsize = struct.calcsize(dtype)
-            if len(value) % dtsize:
+            itemsize = struct.calcsize(dataformat)
+            if len(value) % itemsize:
                 raise ValueError("invalid packed binary data")
-            count = len(value) // dtsize
-        if len(dtype) > 1:
-            count *= int(dtype[:-1])
-            dtype = dtype[-1]
+            count = len(value) // itemsize
+            rawcount = count
+
+        if datatype in (5, 10):  # rational
+            count *= 2
+            dataformat = dataformat[-1]
+
         ifdentry = [
-            self._pack("HH", code, tifftype),
-            self._pack(self._writer._offsetformat, rawcount),
+            self._pack("HH", code, datatype),
+            self._pack(self._writer.tiff.offsetformat, rawcount),
         ]
+
         ifdvalue = None
-        if struct.calcsize(dtype) * count <= self._writer._offsetsize:
+        if struct.calcsize(dataformat) * count <= self._writer.tiff.offsetsize:
             # value(s) can be written directly
             if isinstance(value, bytes):
-                ifdentry.append(self._pack(self._writer._valueformat, value))
+                ifdentry.append(self._pack(f"{self.tiff.offsetsize}s", value))
             elif count == 1:
                 if isinstance(value, (tuple, list, numpy.ndarray)):
                     value = value[0]
                 ifdentry.append(
-                    self._pack(self._writer._valueformat, self._pack(dtype, value))
+                    self._pack(
+                        f"{self._writer.tiff.offsetsize}s",
+                        self._pack(dataformat, value),
+                    )
                 )
             else:
                 ifdentry.append(
                     self._pack(
-                        self._writer._valueformat,
-                        self._pack(str(count) + dtype, *value),
+                        f"{self._writer.tiff.offsetsize}s",
+                        self._pack(f"{count}{dataformat}", *value),
                     )
                 )
         else:
             # use offset to value(s)
-            ifdentry.append(self._pack(self._writer._offsetformat, 0))
+            ifdentry.append(self._pack(self._writer.tiff.offsetformat, 0))
             if isinstance(value, bytes):
                 ifdvalue = value
             elif isinstance(value, numpy.ndarray):
                 if value.size != count:
                     raise RuntimeError("value.size != count")
-                if value.dtype.char != dtype:
+                if value.dtype.char != dataformat:
                     raise RuntimeError("value.dtype.char != dtype")
                 ifdvalue = value.tobytes()
             elif isinstance(value, (tuple, list)):
-                ifdvalue = self._pack(str(count) + dtype, *value)
+                ifdvalue = self._pack(f"{count}{dataformat}", *value)
             else:
-                ifdvalue = self._pack(dtype, value)
+                ifdvalue = self._pack(dataformat, value)
         tags.append((code, b"".join(ifdentry), ifdvalue, writeonce))
 
     def _init_writer(self):
@@ -607,7 +969,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._tags = []
 
-        self.frontend._metadata.image[0].id(Path(self.frontend._file_path).name)
+        self.frontend._metadata.images[
+            0
+        ].id = f"Image:{Path(self.frontend._file_path).name}"
 
         if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True
@@ -618,15 +982,14 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             self.frontend._file_path, bigtiff=big_tiff, append=False
         )
 
-        self._byteorder = self._writer._byteorder
+        self._byteorder = self._writer.tiff.byteorder
 
         self._datashape = (1, 1, 1) + (self.frontend.Y, self.frontend.X) + (1,)
 
         self._datadtype = numpy.dtype(self.frontend.dtype).newbyteorder(self._byteorder)
 
-        offsetsize = self._writer._offsetsize
+        offsetsize = self._writer.tiff.offsetsize
 
-        # self._compresstag = tifffile.TIFF.COMPRESSION.NONE
         self._compresstag = tifffile.TIFF.COMPRESSION.ADOBE_DEFLATE
 
         # normalize data shape to 5D or 6D, depending on volume:
@@ -648,19 +1011,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             f = f.limit_denominator(max_denominator)
             return f.numerator, f.denominator
 
-        description = "".join(
-            [
-                '<?xml version="1.0" encoding="UTF-8"?>',
-                "<!-- Warning: this comment is an OME-XML metadata block, ",
-                "which contains crucial dimensional parameters and other",
-                "important metadata. Please edit cautiously (if at all), ",
-                "and back up the original data before doing so. For more ",
-                "information, see the OME-TIFF web site: ",
-                "https://docs.openmicroscopy.org/latest/ome-model/ome-tiff/. -->",
-                ome_types.to_xml(self.frontend._metadata),
-                # str(self.frontend._metadata).replace("ome:", "").replace(":ome", ""),
-            ]
-        )
+        description = ome_types.to_xml(self.frontend._metadata)
 
         self._addtag(270, "s", 0, description, writeonce=True)  # Description
         self._addtag(305, "s", 0, f"bfio v{bfio.__version__}")  # Software
@@ -729,7 +1080,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         )
         self._addtag(
             self._tagoffsets,
-            self._writer._offsetformat,
+            self._writer.tiff.offsetformat,
             self._numtiles,
             [0] * self._numtiles,
         )
@@ -738,40 +1089,14 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         # the entries in an IFD must be sorted in ascending order by tag code
         self._tags = sorted(self._tags, key=lambda x: x[0])
 
-    def _open_next_page(self):
-        if self._current_page is None:
-            self._current_page = 0
-        else:
-            self._current_page += 1
-
-        if self._current_page == 1:
-            for ind, tag in enumerate(self._tags):
-                if tag[0] == 270:
-                    del self._tags[ind]
-                    break
-            description = (
-                "ImageJ=\nhyperstack=true\nimages=1\n"
-                + f"channels={self.frontend.C}\n"
-                + f"slices={self.frontend.Z}\n"
-                + "frames={self.frontend.T}"
-            )
-            self._addtag(270, "s", 0, description)  # Description
-            self._tags = sorted(self._tags, key=lambda x: x[0])
-
-        fh = self._writer._fh
-
+        fh = self._writer.filehandle
         self._ifdpos = fh.tell()
 
-        tagnoformat = self._writer._tagnoformat
-        offsetformat = self._writer._offsetformat
-        offsetsize = self._writer._offsetsize
-        tagsize = self._writer._tagsize
-        tagbytecounts = self._tagbytecounts
-        tagoffsets = self._tagoffsets
-        tags = self._tags
+        offsetformat = self._writer.tiff.offsetformat
+        offsetsize = self._writer.tiff.offsetsize
 
         if self._ifdpos % 2:
-            # location of IFD must begin on a word boundary
+            # location of IFD must begin on a word boundary_ifdoffset
             fh.write(b"\0")
             self._ifdpos += 1
 
@@ -780,104 +1105,38 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         fh.write(self._pack(offsetformat, self._ifdpos))
         fh.seek(self._ifdpos)
 
-        # create IFD in memory, do not write to disk
-        if self._current_page < 2:
-            self._ifd = io.BytesIO()
-            self._ifd.write(self._pack(tagnoformat, len(tags)))
-            tagoffset = self._ifd.tell()
-            self._ifd.write(b"".join(t[1] for t in tags))
-            self._ifdoffset = self._ifd.tell()
-            self._ifd.write(self._pack(offsetformat, 0))  # offset to next IFD
-            # write tag values and patch offsets in ifdentries
-            for tagindex, tag in enumerate(tags):
-                offset = tagoffset + tagindex * tagsize + offsetsize + 4
-                code = tag[0]
-                value = tag[2]
-                if value:
-                    pos = self._ifd.tell()
-                    if pos % 2:
-                        # tag value is expected to begin on word boundary
-                        self._ifd.write(b"\0")
-                        pos += 1
-                    self._ifd.seek(offset)
-                    self._ifd.write(self._pack(offsetformat, self._ifdpos + pos))
-                    self._ifd.seek(pos)
-                    self._ifd.write(value)
-                    if code == tagoffsets:
-                        self._dataoffsetsoffset = offset, pos
-                    elif code == tagbytecounts:
-                        self._databytecountsoffset = offset, pos
-                    elif code == 270 and value.endswith(b"\0\0\0\0"):
-                        # image description buffer
-                        self._descriptionoffset = self._ifdpos + pos
-                        self._descriptionlenoffset = (
-                            self._ifdpos + tagoffset + tagindex * tagsize + 4
-                        )
-                elif code == tagoffsets:
-                    self._dataoffsetsoffset = offset, None
-                elif code == tagbytecounts:
-                    self._databytecountsoffset = offset, None
-            self._ifdsize = self._ifd.tell()
-            if self._ifdsize % 2:
-                self._ifd.write(b"\0")
-                self._ifdsize += 1
+        # Create the ifd headers
+        TiffIFDHeaders._ifdpos = self._ifdpos
+        self.headers = TiffIFDHeaders(self)
 
-        self._databytecounts = [0 for _ in self._databytecounts]
-        self._databyteoffsets = [0 for _ in self._databytecounts]
-
-        # move to file position where data writing will begin
-        # will write the tags later when the tile offsets are known
-        fh.seek(self._ifdsize, 1)
-
-        # write image data
-        self._dataoffset = fh.tell()
-        skip = (16 - (self._dataoffset % 16)) % 16
+        # create a gap between the headers and the beginning of the tile data
+        headers_size = len(self.headers)
+        fh.seek(headers_size + self._ifdpos)
+        skip = (16 - (headers_size % 16)) % 16
         fh.seek(skip, 1)
-        self._dataoffset += skip
+        self._dataoffset = headers_size + skip
 
-        self._page_open = True
+    def iter_tiles(self, data, tile, tiles):
+        """Return iterator over tiles in data array of normalized shape."""
+        shape = data.shape
+        if not 1 < len(tile) < 4:
+            raise ValueError("invalid tile shape")
+        for page in data:
+            for plane in page:
+                for ty in range(tiles[0]):
+                    for tx in range(tiles[1]):
+                        chunk = numpy.empty(tile + (shape[-1],), dtype=data.dtype)
+                        c1 = min(tile[0], shape[3] - ty * tile[0])
+                        c2 = min(tile[1], shape[4] - tx * tile[1])
+                        chunk[c1:, c2:] = 0
+                        chunk[:c1, :c2] = plane[
+                            0,
+                            ty * tile[0] : ty * tile[0] + c1,
+                            tx * tile[1] : tx * tile[1] + c2,
+                        ]
+                        yield chunk
 
-    def _close_page(self):
-
-        offsetformat = self._writer._offsetformat
-        bytecountformat = self._bytecountformat
-
-        fh = self._writer._fh
-
-        # update strip/tile offsets
-        offset, pos = self._dataoffsetsoffset
-        self._ifd.seek(offset)
-        if pos is not None:
-            self._ifd.write(self._pack(offsetformat, self._ifdpos + pos))
-            self._ifd.seek(pos)
-            for size in self._databyteoffsets:
-                self._ifd.write(self._pack(offsetformat, size))
-        else:
-            self._ifd.write(self._pack(offsetformat, self._dataoffset))
-
-        # update strip/tile bytecounts
-        offset, pos = self._databytecountsoffset
-        self._ifd.seek(offset)
-        if pos:
-            self._ifd.write(self._pack(offsetformat, self._ifdpos + pos))
-            self._ifd.seek(pos)
-        self._ifd.write(self._pack(bytecountformat, *self._databytecounts))
-
-        self._fhpos = fh.tell()
-        fh.seek(self._ifdpos)
-        fh.write(self._ifd.getvalue())
-        fh.flush()
-        fh.seek(self._fhpos)
-
-        self._writer._ifdoffset = self._ifdpos + self._ifdoffset
-
-        # remove tags that should be written only once
-        if self._current_page == 0:
-            self._tags = [tag for tag in self._tags if not tag[-1]]
-
-        self._page_open = False
-
-    def _write_tiles(self, data, X, Y):
+    def _write_tiles(self, data, X, Y, Z, C, T):
 
         assert len(X) == 2 and len(Y) == 2
 
@@ -886,7 +1145,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                 "X or Y positions are not on tile boundary, tile may save incorrectly"
             )
 
-        fh = self._writer._fh
+        fh = self._writer.filehandle
 
         x_tiles = list(
             range(
@@ -905,36 +1164,56 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             (X[1] - X[0] - 1 + self.frontend._TILE_SIZE) // self.frontend._TILE_SIZE,
         )
 
-        data = data.reshape(1, 1, 1, data.shape[0], data.shape[1], 1)
-        tileiter = tifffile.iter_tiles(
-            data, (self.frontend._TILE_SIZE, self.frontend._TILE_SIZE), tile_shape
-        )
+        tileiters = []
+        for ti, t in zip(range(len(T)), T):
+            t_index = t * self.frontend.Z * self.frontend.C
+            for ci, c in zip(range(len(C)), C):
+                c_index = t_index + c * self.frontend.Z
+                for zi, z in zip(range(0, Z[1] - Z[0]), range(Z[0], Z[1])):
+                    index = c_index + z
+                    tileiters.append(
+                        (
+                            index,
+                            self.iter_tiles(
+                                data[:, :, zi, ci, ti].reshape(
+                                    1, 1, 1, data.shape[0], data.shape[1], 1
+                                ),
+                                (self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+                                tile_shape,
+                            ),
+                        )
+                    )
 
-        def compress(data, level=1):
+        def compress(page_index, tile_index, data, level=1):
 
-            return imagecodecs.deflate_encode(data, level)
+            return (page_index, tile_index, imagecodecs.deflate_encode(data, level))
 
-        tileiter = [copy.deepcopy(tile) for tile in tileiter]
         if self.frontend.max_workers > 1:
 
             with ThreadPoolExecutor(max_workers=self.frontend.max_workers) as executor:
+                compressed_tiles = []
+                for page_index, tileiter in tileiters:
 
-                compressed_tiles = iter(executor.map(compress, tileiter))
+                    for tileindex, tile in zip(tiles, tileiter):
+                        compressed_tiles.append(
+                            executor.submit(compress, page_index, tileindex, tile)
+                        )
 
-            for tileindex in tiles:
-                t = next(compressed_tiles)
-                self._databyteoffsets[tileindex] = fh.tell()
-                fh.write(t)
-                self._databytecounts[tileindex] = len(t)
+                for thread in as_completed(compressed_tiles):
+
+                    page_index, tileindex, tile = thread.result()
+                    self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
+                    fh.write(tile)
+                    self.headers[page_index].databytecounts[tileindex] = len(tile)
+
         else:
-            for tileindex, tile in zip(tiles, tileiter):
+            for page_index, tileiter in tileiters:
+                for tileindex, tile in zip(tiles, tileiter):
 
-                t = compress(tile)
-                self._databyteoffsets[tileindex] = fh.tell()
-                fh.write(t)
-                self._databytecounts[tileindex] = len(t)
-
-        return None
+                    _, _, t = compress(page_index, tileindex, tile)
+                    self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
+                    fh.write(t)
+                    self.headers[page_index].databytecounts[tileindex] = len(t)
 
     def close(self):
         """close_image Close the image.
@@ -943,32 +1222,23 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         to. This allows for proper closing and organization of metadata.
         """
         if self._writer is not None:
-            if self._page_open:
-                self._close_page()
-            self._ifd.close()
-            self._writer._fh.close()
+            for header in self.headers:
+                self._writer.filehandle.seek(header._ifdstart)
+                self._writer.filehandle.write(header.getvalue())
+            self._writer.filehandle.close()
+            self._writer = None
 
     def _write_image(self, X, Y, Z, C, T, image):
 
-        if self._current_page is not None and Z[0] < self._current_page:
-            raise ValueError(
-                "Cannot write z layers below the current open page. "
-                + "(current page={},Z[0]={})".format(self._current_page, Z[0])
-            )
-
         # Do the work
-        for zi, z in zip(range(0, Z[1] - Z[0]), range(Z[0], Z[1])):
-            while z != self._current_page:
-                if self._page_open:
-                    self._close_page()
-                self._open_next_page()
-            self._write_tiles(image[..., zi, 0, 0], X, Y)
+        self._write_tiles(image, X, Y, Z, C, T)
 
     def __del__(self):
         self.close()
 
 
 try:
+    from bioformats_jar import get_loci
     import jpype
     import jpype.imports
     from jpype.types import JString
@@ -981,20 +1251,19 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            if not jpype.isJVMStarted():
-                bfio.start()
+            loci = get_loci()
 
             global ImageReader
-            from loci.formats import ImageReader
+            ImageReader = loci.formats.ImageReader
 
             global ServiceFactory
-            from loci.common.services import ServiceFactory
+            ServiceFactory = loci.common.services.ServiceFactory
 
             global OMEXMLService
-            from loci.formats.services import OMEXMLService
+            OMEXMLService = loci.formats.services.OMEXMLService
 
             global IMetadata
-            from loci.formats.meta import IMetadata
+            IMetadata = loci.formats.meta.IMetadata
 
             JavaReader._classes_loaded = True
 
@@ -1021,18 +1290,9 @@ try:
 
             if self._metadata is None:
 
-                try:
-                    self._metadata = ome_types.from_xml(str(self.omexml.dumpXML()))
-                except XMLSchemaValidationError:
-                    if self.frontend.clean_metadata:
-                        self._metadata = ome_types.from_xml(
-                            clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
-                        )
-                        self.logger.warning(
-                            "read_metadata(): OME XML required reformatting."
-                        )
-                    else:
-                        raise
+                self._metadata = ome_types.from_xml(
+                    clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
+                )
 
             return self._metadata
 
@@ -1044,13 +1304,7 @@ try:
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
 
-                        # TODO: This should be changed in the future
-                        # See the comment below about properly handling
-                        # interleaved channel data.
-                        if self.frontend.spp > 1:
-                            index = self._rdr.getIndex(z, 0, t)
-                        else:
-                            index = self._rdr.getIndex(z, c, t)
+                        index = self._rdr.getIndex(z, c // self.frontend.spp, t)
 
                         x_max = min([X[1], self.frontend.X])
                         for x in range(X[0], x_max, self._chunk_size):
@@ -1064,7 +1318,8 @@ try:
                                     index, x, y, x_range, y_range
                                 )
                                 image = numpy.frombuffer(
-                                    bytes(image), self.frontend.dtype
+                                    bytes(image),
+                                    self.frontend.dtype,
                                 )
 
                                 # TODO: This should be changed in the future
@@ -1072,11 +1327,14 @@ try:
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
-                                if self.frontend.spp > 1:
+                                if self._rdr.getFormat() not in ["Zeiss CZI"]:
                                     image = image.reshape(
-                                        self.frontend.c, y_range, x_range
-                                    )
-                                    image = image[c, ...].squeeze()
+                                        self.frontend.spp, y_range, x_range
+                                    )[c % self.frontend.spp, ...]
+                                else:
+                                    image = image.reshape(
+                                        y_range, x_range, self.frontend.spp
+                                    )[..., c % self.frontend.spp]
 
                                 out[
                                     y - Y[0] : y + y_range - Y[0],
@@ -1084,7 +1342,7 @@ try:
                                     zi,
                                     ci,
                                     ti,
-                                ] = image.reshape(y_range, x_range)
+                                ] = image
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr is not None:
@@ -1129,9 +1387,30 @@ try:
 
             super().__init__(frontend)
 
-            # Test to see if the loci_tools.jar is present
-            if bfio.JARS is None:
-                raise FileNotFoundError("The loci_tools.jar could not be found.")
+            # Force data to use XYZCT ordering
+            self.frontend.metadata.images[0].pixels.dimension_order = "XYZCT"
+
+            # Expand interleaved RGB to separate image planes for each channel
+            image = self.frontend.metadata.images[0]
+
+            pseudo_interleaved = any(
+                channel.samples_per_pixel > 1 for channel in image.pixels.channels
+            )
+
+            if image.pixels.interleaved or pseudo_interleaved:
+
+                image.pixels.interleaved = False
+
+                for _ in range(len(image.pixels.channels)):
+
+                    channel = image.pixels.channels.pop(0)
+                    expand_channels = channel.samples_per_pixel
+                    channel.samples_per_pixel = 1
+
+                    for c in range(expand_channels):
+                        new_channel = ome_types.model.Channel(**channel.dict())
+                        new_channel.id = channel.id + f":{c}"
+                        image.pixels.channels.append(new_channel)
 
         def _init_writer(self):
             """_init_writer Initializes file writing.
@@ -1155,22 +1434,18 @@ try:
             # Set the metadata
             service = ServiceFactory().getInstance(OMEXMLService)
             xml = ome_types.to_xml(self.frontend.metadata)
-            # xml = (
-            #     str(self.frontend.metadata)
-            #     .replace("<ome:", "<")
-            #     .replace("</ome:", "</")
-            # )
             metadata = service.createOMEXMLMetadata(xml)
             writer.setMetadataRetrieve(metadata)
 
             # Set the file path
             writer.setId(str(self.frontend._file_path))
 
-            # We only save a single channel, so interleaved is unecessary
-            writer.setInterleaved(False)
-
             # Set compression to
             writer.setCompression(CompressionType.ZLIB.getCompression())
+
+            # Set image tiles
+            writer.setTileSizeX(1024)
+            writer.setTileSizeY(1024)
 
             self._writer = writer
 
@@ -1180,6 +1455,10 @@ try:
 
             X, Y, Z, C, T = dims
 
+            index = (
+                Z[0] + self.frontend.z * C[0] + self.frontend.z * self.frontend.c * T[0]
+            )
+
             x_range = min([self.frontend.X, X[1] + 1024]) - X[1]
             y_range = min([self.frontend.Y, Y[1] + 1024]) - Y[1]
 
@@ -1187,7 +1466,8 @@ try:
             pixel_buffer = out[
                 Y[0] : Y[0] + y_range, X[0] : X[0] + x_range, Z[0], C[0], T[0]
             ].tobytes()
-            self._writer.saveBytes(Z[1], pixel_buffer, X[1], Y[1], x_range, y_range)
+
+            self._writer.saveBytes(index, pixel_buffer, X[1], Y[1], x_range, y_range)
 
         def _write_image(self, X, Y, Z, C, T, image):
 
@@ -1204,12 +1484,8 @@ try:
                 self._process_chunk(args)
                 self.first_tile = True
 
-            if self.frontend.max_workers > 1:
-                with ThreadPoolExecutor(self.frontend.max_workers) as executor:
-                    executor.map(self._process_chunk, self._tile_indices)
-            else:
-                for args in self._tile_indices:
-                    self._process_chunk(args)
+            for args in self._tile_indices:
+                self._process_chunk(args)
 
         def close(self):
             if jpype.isJVMStarted() and self._writer is not None:
@@ -1221,7 +1497,7 @@ try:
 
 except ModuleNotFoundError:
 
-    logger.info(
+    logger.warning(
         "Java backend is not available. This could be due to a "
         + "missing dependency (jpype)."
     )
@@ -1264,12 +1540,18 @@ try:
                     try:
                         self._metadata = ome_types.from_xml(
                             self._root.attrs["metadata"]
+                            # Uncomment this when ome_types releases a new version
+                            # https://github.com/tlambert03/ome-types/pull/127
+                            # validate=True,
                         )
                     except XMLSchemaValidationError:
                         if self.frontend.clean_metadata:
                             self._metadata = ome_types.from_xml(
                                 clean_ome_xml_for_known_issues(
                                     self._root.attrs["metadata"]
+                                    # Uncomment when ome_types releases a new version
+                                    # https://github.com/tlambert03/ome-types/pull/127
+                                    # validate=True,
                                 )
                             )
                             self.logger.warning(
