@@ -28,7 +28,7 @@ tile_grid_size = math.ceil(math.sqrt(cpu_count()))
 tile_size = tile_grid_size * 1024
 
 # Set up the BioReader
-with BioReader(PATH, backend="java", max_workers=cpu_count()) as br:
+with BioReader(PATH, backend="bioformats", max_workers=cpu_count()) as br:
 
     # Loop through timepoints
     for t in range(br.T):

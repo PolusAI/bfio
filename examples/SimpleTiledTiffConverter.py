@@ -19,7 +19,7 @@ if not (PATH / FILENAME).exists():
 
 """ Convert the tif to tiled tiff """
 # Set up the BioReader
-with BioReader(PATH / FILENAME, backend="java") as br, BioWriter(
+with BioReader(PATH / FILENAME, backend="bioformats") as br, BioWriter(
     PATH / "out.ome.tif", metadata=br.metadata, backend="python"
 ) as bw:
 

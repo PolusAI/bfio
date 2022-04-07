@@ -47,15 +47,15 @@ class BioReader(BioBase):
     any Bioformats supported file format, but is specially optimized for
     handling the OME tiled tiff format.
 
-    There are three backends: ``java``, ``python``, and ``zarr``. The ``java``
-    backend directly uses Bio-Formats for file reading, and can read any format
-    that is supported by Bio-Formats. The ``python`` backend will only read
+    There are three backends: ``bioformats``, ``python``, and ``zarr``. The
+    ``bioformats`` backend directly uses Bio-Formats for file reading, and can read any
+    forma that is supported by Bio-Formats. The ``python`` backend will only read
     images in OME Tiff format with tile tags set to 1024x1024, and is
-    significantly faster than the "java" backend for reading these types of tiff
+    significantly faster than the "bioformats" backend for reading these types of tiff
     files. The ``zarr`` backend will only read OME Zarr files.
 
     File reading and writing are multi-threaded by default, except for the
-    ``java`` backend which does not currently support threading. Half of the
+    ``bioformats`` backend which does not currently support threading. Half of the
     available CPUs detected by multiprocessing.cpu_count() are used to read
     an image.
 
@@ -63,7 +63,7 @@ class BioReader(BioBase):
     https://www.openmicroscopy.org/bio-formats/
 
     Note:
-        In order to use the ``java`` backend, jpype must be installed.
+        In order to use the ``bioformats`` backend, jpype must be installed.
     """
 
     logger = logging.getLogger("bfio.bfio.BioReader")
@@ -91,7 +91,7 @@ class BioReader(BioBase):
             file_path: Path to file to read
             max_workers: Number of threads used to read and image. *Default is
                 half the number of detected cores.*
-            backend: Can be ``python``, ``java``, or ``zarr``. If None, then
+            backend: Can be ``python``, ``bioformats``, or ``zarr``. If None, then
                 BioReader will try to autodetect the proper backend.
                 *Default is python.*
             clean_metadata: Will try to reformat poorly formed OME XML metadata if True.
@@ -109,7 +109,7 @@ class BioReader(BioBase):
         self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
-        elif self._backend_name == "java":
+        elif self._backend_name == "bioformats":
             try:
                 self._backend = backends.JavaReader(self)
             except Exception as err:
@@ -137,7 +137,7 @@ class BioReader(BioBase):
                     + "To change back, set the object property."
                 )
         else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
+            raise ValueError('backend must be "python", "bioformats", or "zarr"')
         self.logger.debug("Finished initializing the backend.")
 
         # Preload the metadata
@@ -267,7 +267,7 @@ class BioReader(BioBase):
             X_tile_shape * Y_tile_shape / 1024**2 + 1
         ) < Z_tile_shape * len(C) * len(T)
 
-        # Initialize the output for zarr and java
+        # Initialize the output for zarr and bioformats
         if self._backend_name != "python":
             output = numpy.zeros(
                 [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)],
@@ -864,7 +864,7 @@ class BioWriter(BioBase):
     https://www.openmicroscopy.org/bio-formats/
 
     Note:
-        In order to use the ``java`` backend, jpype must be installed.
+        In order to use the ``bioformats`` backend, jpype must be installed.
     """
 
     logger = logging.getLogger("bfio.bfio.BioWriter")
@@ -884,7 +884,7 @@ class BioWriter(BioBase):
             file_path: Path to file to read
             max_workers: Number of threads used to read and image. *Default is
                 half the number of detected cores.*
-            backend: Must be ``python`` or ``java``. *Default is python.*
+            backend: Must be ``python`` or ``bioformats``. *Default is python.*
             metadata: This directly sets the ome tiff metadata using the OMEXML
                 class if specified. *Defaults to None.*
             image: The metadata will be set based on the dimensions and data
@@ -928,12 +928,12 @@ class BioWriter(BioBase):
         # Ensure backend is supported
         if self._backend_name == "python":
             self._backend = backends.PythonWriter(self)
-        elif self._backend_name == "java":
+        elif self._backend_name == "bioformats":
             self._backend = backends.JavaWriter(self)
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrWriter(self)
         else:
-            raise ValueError('backend must be "python", "java", or "zarr"')
+            raise ValueError('backend must be "python", "bioformats", or "zarr"')
 
         if not self._file_path.name.endswith(
             ".ome.tif"
@@ -1481,7 +1481,7 @@ try:
 
             # If the backend is wrong, fall back to BioFormats
             except ValueError:
-                self.br = BioReader(file, backend="java")
+                self.br = BioReader(file, backend="bioformats")
 
             # Raise an error if the data type is unrecognized by BioFormats/bfio
             numpy.iinfo(self.br.dtype).min

@@ -110,7 +110,7 @@ class TestOmeTiffWrite(unittest.TestCase):
     def test_write_java(self):
         # Cannot write an image with channel information using python backend
 
-        with bfio.BioWriter("4d_array.ome.tif", backend="java") as bw:
+        with bfio.BioWriter("4d_array.ome.tif", backend="bioformats") as bw:
 
             image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
