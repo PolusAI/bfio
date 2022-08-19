@@ -23,7 +23,7 @@ setup(
         "Source": "https://github.com/labshare/bfio",
     },
     entry_points={"napari.plugin": "bfio = bfio.bfio"},
-    packages=find_packages(),
+    packages=find_packages(exclude=("test", "tests", "test.*", "tests.*")),
     package_data={"bfio": ["VERSION"]},
     classifiers=[
         "Development Status :: 5 - Production/Stable",
