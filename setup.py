@@ -34,10 +34,10 @@ setup(
     ],
     python_requires=">=3.6",
     install_requires=[
-        "tifffile>=2021.8.30",
+        "tifffile>=2021.8.30,<2022.4.22",
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
-        "ome-types>=0.2.10",
+        "ome-types>=0.3.4",
         "lxml",  # remove this when upgrading to the next version of ome-types
     ],
     extras_require={
