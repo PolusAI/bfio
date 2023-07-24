@@ -446,16 +446,16 @@ class PythonReader(bfio.base_classes.AbstractReader):
     class _TiffBytesOffsets:
         def __init__(self, parent, index):
             self._tiff_frame = tifffile.TiffFrame(parent, index)
-        
+
         def get_offset(self):
             return self._tiff_frame.offset
-        
+
         def get_index(self):
             return self._tiff_frame.index
-        
+
         def get_dataoffsets(self):
             return self._tiff_frame.dataoffsets
-        
+
         def get_databytecounts(self):
             return self._tiff_frame.databytecounts
 
@@ -471,8 +471,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         obc = self._TiffBytesOffsets(parent, index)
         self._offsets_bytes = obc
-
-
 
         return obc.get_dataoffsets(), obc.get_databytecounts()
 
