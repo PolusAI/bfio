@@ -325,7 +325,6 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
 
     # If any piece of metadata was changed alert and rewrite
     if len(metadata_changes) > 0:
-
         # Register namespace
         ET.register_namespace("", f"http://{REPLACEMENT_OME_XSD_REFERENCE}")
 
@@ -340,7 +339,6 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
 
 
 class PythonReader(bfio.base_classes.AbstractReader):
-
     logger = logging.getLogger("bfio.backends.PythonReader")
 
     _rdr: tifffile.TiffFile = None
@@ -365,12 +363,10 @@ class PythonReader(bfio.base_classes.AbstractReader):
             logger.debug(tag)
 
         if not self._rdr.pages[0].is_tiled or not self._rdr.pages[0].rowsperstrip:
-
             if (
                 self._rdr.pages[0].tilewidth < self.frontend._TILE_SIZE
                 or self._rdr.pages[0].tilelength < self.frontend._TILE_SIZE
             ):
-
                 self.close()
                 raise TypeError(
                     frontend._file_path.name
@@ -384,7 +380,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
             self._rdr.pages[0].tilewidth != self.frontend._TILE_SIZE
             or self._rdr.pages[0].tilelength != self.frontend._TILE_SIZE
         ):
-
             if width > frontend._TILE_SIZE or height > frontend._TILE_SIZE:
                 self.close()
                 raise ValueError(
@@ -412,14 +407,12 @@ class PythonReader(bfio.base_classes.AbstractReader):
         self._rdr.filehandle.close()
 
     def __getstate__(self) -> Dict:
-
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
         state_dict.update({"file_path": self.frontend._file_path})
 
         return state_dict
 
     def __setstate__(self, state) -> None:
-
         for k, v in state.items():
             if k == "file_path":
                 self._lock = threading.Lock()
@@ -432,22 +425,15 @@ class PythonReader(bfio.base_classes.AbstractReader):
         self.logger.debug("read_metadata(): Reading metadata...")
 
         if self._metadata is None:
-
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata,
-                    # Uncomment this when ome_types releases a new version
-                    # https://github.com/tlambert03/ome-types/pull/127
-                    # validate=True,
+                    self._rdr.ome_metadata, parser="lxml", validate=False
                 )
             except (XMLSchemaValidationError, XMLSchemaValidateError):
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
-                        cleaned,
-                        # Uncomment this when ome_types releases a new version
-                        # https://github.com/tlambert03/ome-types/pull/127
-                        # validate=True,
+                        cleaned, parser="lxml", validate=False
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -459,7 +445,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     class _TiffBytesOffsets(tifffile.TiffFrame):
         def __init__(self, parent, index):
-
             self.index = index
 
             self.parent = parent
@@ -517,7 +502,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
             return tags
 
     def _page_offsets_bytes(self, index: int):
-
         if index == 0:
             return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
 
@@ -534,7 +518,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
         return obc.dataoffsets, obc.databytecounts
 
     def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
-
         self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
         assert all(len(D) == 2 for D in [X, Y, Z])
         assert all(isinstance(D, list) for D in [C, T])
@@ -568,7 +551,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
         return offsets, bytecounts
 
     def _process_chunk(self, args):
-
         keyframe = self._keyframe
         out = self._image
 
@@ -598,7 +580,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
             ]
 
     def _read_image(self, X, Y, Z, C, T, output):
-
         # Get keyframe
         self._keyframe = self._rdr.pages[0].keyframe
 
@@ -641,7 +622,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
 
 class TiffIFDHeader:
-
     databyteoffsets: List[int]
     databytecounts: List[int]
     dataoffsetsoffset: Tuple
@@ -658,7 +638,6 @@ class TiffIFDHeader:
     def __init__(
         self, tile_count: int, bytecountformat: str, offsetformat: str, byteorder: str
     ):
-
         self.databyteoffsets = [0 for _ in range(tile_count)]
         self.databytecounts = [0 for _ in range(tile_count)]
         self.bytecountformat = bytecountformat
@@ -672,9 +651,7 @@ class TiffIFDHeader:
         return struct.pack(fmt, *val)
 
     def getvalue(self):
-
         if self._value is None:
-
             offsetformat = self.offsetformat
             bytecountformat = self.bytecountformat
 
@@ -702,20 +679,17 @@ class TiffIFDHeader:
         return self._value
 
     def set_next_ifd(self, pos):
-
         self.ifd.seek(self.ifdoffset)
         self.ifd.write(self._pack(self.offsetformat, pos))
         self.ifd.seek(self.ifdsize)
 
 
 class TiffIFDHeaders(object):
-
     tags: List[Tuple] = []
     headers: List[TiffIFDHeader] = []
     _ifdpos: int = 8
 
     def __init__(self, writer: "PythonWriter"):
-
         self.tiff = writer._writer.tiff
         self.tags = writer._tags
         self.page_count = writer.frontend.Z * writer.frontend.C * writer.frontend.T
@@ -762,11 +736,9 @@ class TiffIFDHeaders(object):
         return struct.pack(fmt, *val)
 
     def __getitem__(self, index):
-
         return self.headers[index]
 
     def _generate_page(self, index):
-
         tagnoformat = self.tiff.tagnoformat
         offsetformat = self.tiff.offsetformat
         offsetsize = self.tiff.offsetsize
@@ -833,7 +805,6 @@ class TiffIFDHeaders(object):
         header.set_next_ifd(self._ifdpos)
 
     def __len__(self):
-
         return sum(self[i].ifdsize for i in range(len(self.headers)))
 
 
@@ -844,7 +815,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
     logger = logging.getLogger("bfio.backends.PythonWriter")
 
     def __init__(self, frontend):
-
         super().__init__(frontend)
 
     def _pack(self, fmt, *val):
@@ -1137,7 +1107,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                         yield chunk
 
     def _write_tiles(self, data, X, Y, Z, C, T):
-
         assert len(X) == 2 and len(Y) == 2
 
         if X[0] % self.frontend._TILE_SIZE != 0 or Y[0] % self.frontend._TILE_SIZE != 0:
@@ -1185,22 +1154,18 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
                     )
 
         def compress(page_index, tile_index, data, level=1):
-
             return (page_index, tile_index, imagecodecs.deflate_encode(data, level))
 
         if self.frontend.max_workers > 1:
-
             with ThreadPoolExecutor(max_workers=self.frontend.max_workers) as executor:
                 compressed_tiles = []
                 for page_index, tileiter in tileiters:
-
                     for tileindex, tile in zip(tiles, tileiter):
                         compressed_tiles.append(
                             executor.submit(compress, page_index, tileindex, tile)
                         )
 
                 for thread in as_completed(compressed_tiles):
-
                     page_index, tileindex, tile = thread.result()
                     self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
                     fh.write(tile)
@@ -1209,7 +1174,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         else:
             for page_index, tileiter in tileiters:
                 for tileindex, tile in zip(tiles, tileiter):
-
                     _, _, t = compress(page_index, tileindex, tile)
                     self.headers[page_index].databyteoffsets[tileindex] = fh.tell()
                     fh.write(t)
@@ -1229,7 +1193,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             self._writer = None
 
     def _write_image(self, X, Y, Z, C, T, image):
-
         # Do the work
         self._write_tiles(image, X, Y, Z, C, T)
 
@@ -1244,7 +1207,6 @@ try:
     from jpype.types import JString
 
     class JavaReader(bfio.base_classes.AbstractReader):
-
         logger = logging.getLogger("bfio.backends.JavaReader")
         _chunk_size = 4096
         _rdr = None
@@ -1268,7 +1230,6 @@ try:
             JavaReader._classes_loaded = True
 
         def __init__(self, frontend):
-
             if not JavaReader._classes_loaded:
                 self._load_java_classes()
 
@@ -1285,11 +1246,9 @@ try:
             self._rdr.setId(JString(str(self.frontend._file_path.absolute())))
 
         def read_metadata(self):
-
             self.logger.debug("read_metadata(): Reading metadata...")
 
             if self._metadata is None:
-
                 self._metadata = ome_types.from_xml(
                     clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
                 )
@@ -1297,13 +1256,11 @@ try:
             return self._metadata
 
         def _read_image(self, X, Y, Z, C, T, output):
-
             out = self._image
 
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
-
                         index = self._rdr.getIndex(z, c // self.frontend.spp, t)
 
                         x_max = min([X[1], self.frontend.X])
@@ -1352,7 +1309,6 @@ try:
             self.close()
 
     class JavaWriter(bfio.base_classes.AbstractWriter):
-
         logger = logging.getLogger("bfio.backends.JavaWriter")
 
         # For Bioformats, the first tile has to be written before any other tile
@@ -1398,11 +1354,9 @@ try:
             )
 
             if image.pixels.interleaved or pseudo_interleaved:
-
                 image.pixels.interleaved = False
 
                 for _ in range(len(image.pixels.channels)):
-
                     channel = image.pixels.channels.pop(0)
                     expand_channels = channel.samples_per_pixel
                     channel.samples_per_pixel = 1
@@ -1450,7 +1404,6 @@ try:
             self._writer = writer
 
         def _process_chunk(self, dims):
-
             out = self._image
 
             X, Y, Z, C, T = dims
@@ -1470,7 +1423,6 @@ try:
             self._writer.saveBytes(index, pixel_buffer, X[1], Y[1], x_range, y_range)
 
         def _write_image(self, X, Y, Z, C, T, image):
-
             if not self.first_tile:
                 args = self._tile_indices.pop(0)
                 if (
@@ -1492,11 +1444,9 @@ try:
                 self._writer.close()
 
         def __del__(self):
-
             self.close()
 
 except ModuleNotFoundError:
-
     logger.warning(
         "Java backend is not available. This could be due to a "
         + "missing dependency (jpype)."
@@ -1504,12 +1454,10 @@ except ModuleNotFoundError:
 
     class JavaReader(bfio.base_classes.AbstractReader):
         def __init__(self, frontend):
-
             raise ImportError("JavaReader class unavailable. Could not import jpype.")
 
     class JavaWriter(bfio.base_classes.AbstractWriter):
         def __init__(self, frontend):
-
             raise ImportError("JavaWriter class unavailable. Could not import jpype.")
 
 
@@ -1518,11 +1466,9 @@ try:
     from numcodecs import Blosc
 
     class ZarrReader(bfio.base_classes.AbstractReader):
-
         logger = logging.getLogger("bfio.backends.ZarrReader")
 
         def __init__(self, frontend):
-
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
@@ -1533,26 +1479,23 @@ try:
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
-            if "metadata" in self._root.attrs.keys():
-
+            metadata_path = self.frontend._file_path.joinpath("OME").joinpath(
+                "METADATA.ome.xml"
+            )
+            if metadata_path.exists():
                 if self._metadata is None:
+                    with open(metadata_path) as fr:
+                        metadata = fr.read()
 
                     try:
                         self._metadata = ome_types.from_xml(
-                            self._root.attrs["metadata"]
-                            # Uncomment this when ome_types releases a new version
-                            # https://github.com/tlambert03/ome-types/pull/127
-                            # validate=True,
+                            metadata, parser="lxml", validate=False
                         )
-                    except XMLSchemaValidationError:
+                    except (XMLSchemaValidationError, XMLSchemaValidateError):
                         if self.frontend.clean_metadata:
+                            cleaned = clean_ome_xml_for_known_issues(metadata)
                             self._metadata = ome_types.from_xml(
-                                clean_ome_xml_for_known_issues(
-                                    self._root.attrs["metadata"]
-                                    # Uncomment when ome_types releases a new version
-                                    # https://github.com/tlambert03/ome-types/pull/127
-                                    # validate=True,
-                                )
+                                cleaned, parser="lxml", validate=False
                             )
                             self.logger.warning(
                                 "read_metadata(): OME XML required reformatting."
@@ -1585,7 +1528,6 @@ try:
                 return omexml
 
         def _process_chunk(self, dims):
-
             X, Y, Z, C, T = dims
 
             ts = self.frontend._TILE_SIZE
@@ -1603,7 +1545,6 @@ try:
             ] = data.transpose(1, 2, 0)
 
         def _read_image(self, X, Y, Z, C, T, output):
-
             if self.frontend.max_workers > 1:
                 with ThreadPoolExecutor(self.frontend.max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
@@ -1615,7 +1556,6 @@ try:
             pass
 
     class ZarrWriter(bfio.base_classes.AbstractWriter):
-
         logger = logging.getLogger("bfio.backends.ZarrWriter")
 
         def __init__(self, frontend):
@@ -1648,7 +1588,15 @@ try:
 
             self._root = zarr.group(store=str(self.frontend._file_path.resolve()))
 
-            self._root.attrs["metadata"] = str(self.frontend._metadata)
+            # Create the metadata
+            metadata_path = (
+                Path(self.frontend._file_path)
+                .joinpath("OME")
+                .joinpath("METADATA.ome.xml")
+            )
+            metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(metadata_path, "w") as fw:
+                fw.write(str(self.frontend._metadata.to_xml()))
 
             self._root.attrs["multiscales"] = [
                 {
@@ -1674,7 +1622,6 @@ try:
             self._writer = writer
 
         def _process_chunk(self, dims):
-
             out = self._image
 
             X, Y, Z, C, T = dims
@@ -1700,7 +1647,6 @@ try:
             )
 
         def _write_image(self, X, Y, Z, C, T, image):
-
             if self.frontend.max_workers > 1:
                 with ThreadPoolExecutor(self.frontend.max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
@@ -1712,7 +1658,6 @@ try:
             pass
 
 except ModuleNotFoundError:
-
     logger.info(
         "Zarr backend is not available. This could be due to a "
         + "missing dependency (i.e. zarr)"
@@ -1720,14 +1665,12 @@ except ModuleNotFoundError:
 
     class ZarrReader(bfio.base_classes.AbstractReader):
         def __init__(self, frontend):
-
             raise ImportError(
                 "ZarrReader class unavailable. Could not import" + " zarr."
             )
 
     class ZarrWriter(bfio.base_classes.AbstractWriter):
         def __init__(self, frontend):
-
             raise ImportError(
                 "ZarrWriter class unavailable. Could not import" + " zarr."
             )
