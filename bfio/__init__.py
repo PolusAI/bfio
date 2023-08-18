@@ -27,9 +27,7 @@ except FileNotFoundError:
 logger.info("VERSION = {}".format(__version__))
 
 if pathlib.Path(__file__).parent.joinpath("jars").is_dir():
-
     try:
-
         import bioformats_jar
 
         _jars_dir = pathlib.Path(bioformats_jar._BFJAR).parent

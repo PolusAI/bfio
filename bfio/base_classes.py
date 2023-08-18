@@ -155,7 +155,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
         )
 
     def _parse_slice(self, keys):  # NOQA: C901
-
         # Dimension ordering and index initialization
         dims = "YXZCT"
         ind = {d: None for d in dims}
@@ -177,7 +176,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
         # If not an empty slice, parse the key tuple
         else:
-
             # At most, 5 indices can be indicated
             if len(keys) > 5:
                 raise ValueError(
@@ -188,7 +186,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
             # If the first key is an ellipsis, read backwards
             if keys[0] is Ellipsis:
-
                 # If the last key is an ellipsis, throw an error
                 if keys[-1] is Ellipsis:
                     raise ValueError(
@@ -201,7 +198,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
             # Get key values
             for dim, key in zip(dims, keys):
-
                 if isinstance(key, slice):
                     start = 0 if key.start is None else key.start
                     stop = getattr(self, dim) if key.stop is None else key.stop
@@ -316,13 +312,11 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
                         # If no z-match could be found, find a channel match and modify
                         elif len(cp) > 0:
-
                             zp = ome_types.model.Plane(**cp[0].dict())
                             zp.the_z = z
 
                         # If no channel match, try to find a timepoint match and modify
                         elif len(tp) > 0:
-
                             zp = ome_types.model.Plane(**tp[0].dict())
                             zp.the_c = c
                             zp.the_z = z
@@ -732,7 +726,6 @@ class AbstractBackend(object, metaclass=abc.ABCMeta):
         self._lock = threading.Lock()
 
     def _image_io(self, X, Y, Z, C, T, image):
-
         # Define tile bounds
         ts = self.frontend._TILE_SIZE
         X_tile_shape = X[1] - X[0]
@@ -814,7 +807,6 @@ class AbstractReader(AbstractBackend):
 
 
 class AbstractWriter(AbstractBackend):  # NOQA: D101
-
     _writer = None
 
     @abc.abstractmethod

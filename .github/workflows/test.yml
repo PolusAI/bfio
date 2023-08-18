@@ -3,7 +3,7 @@ name: Python Tests
 on:
   workflow_dispatch:
   pull_request:
-  
+
 jobs:
   unittest:
     name: unittest
@@ -23,6 +23,8 @@ jobs:
           sudo apt update
           sudo apt install openjdk-8-jdk -y
           python -m pip install --upgrade pip
+          python -m pip install ome-types==0.3.4
+          python -m pip install xmlschema
           pip install .[dev]
       - name: Test with unittest
         run: |

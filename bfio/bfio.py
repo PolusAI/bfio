@@ -147,13 +147,11 @@ class BioReader(BioBase):
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
 
     def __getstate__(self) -> typing.Dict:
-
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
 
         return state_dict
 
     def __setstate__(self, state) -> None:
-
         assert all(n in self._STATE_DICT for n in state.keys())
         assert all(n in state.keys() for n in self._STATE_DICT)
 
@@ -436,7 +434,6 @@ class BioReader(BioBase):
 
         # Is there data in the buffer?
         if self._supertile_index.qsize() > 0 or self._data_in_buffer.qsize() > 0:
-
             # If there is data in the _raw_buffer, return if there isn't room to load
             # it into the _pixel_buffer
             if self._pixel_buffer.shape[1] - self._tile_last_column < self._TILE_SIZE:
@@ -574,7 +571,6 @@ class BioReader(BioBase):
         return self
 
     def __iter__(self):  # NOQA:C901
-
         tile_size = self._iter_tile_size
         tile_stride = self._iter_tile_stride
         batch_size = self._iter_batch_size
@@ -1474,7 +1470,6 @@ try:
         """Special class to read data into Napari."""
 
         def __init__(self, file: str):
-
             # Let BioReader try to guess the backend based on file extension
             try:
                 self.br = BioReader(file)
@@ -1487,7 +1482,6 @@ try:
             numpy.iinfo(self.br.dtype).min
 
         def __call__(self, file):
-
             metadata = {
                 "contrast_limits": (
                     numpy.iinfo(self.br.dtype).min,
@@ -1500,7 +1494,6 @@ try:
             ]
 
         def __getitem__(self, keys):
-
             return self.br[tuple(reversed(keys))]
 
         @property
@@ -1517,7 +1510,6 @@ try:
 
     @napari_hook_implementation(specname="napari_get_reader")
     def get_reader(path: str):
-
         try:
             reader = NapariReader(path)
             BioReader.logger.info("Reading with the BioReader.")
@@ -1529,7 +1521,6 @@ try:
 
     @napari_hook_implementation(specname="napari_write_image")
     def get_writer(path: str, data: numpy.ndarray, meta: dict):
-
         if isinstance(data, NapariReader):
             bw = BioWriter(path, metadata=data.br.metadata)
 
