@@ -443,79 +443,36 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         return self._metadata
 
-    class _TiffBytesOffsets(tifffile.TiffFrame):
+    class _TiffBytesOffsets:
         def __init__(self, parent, index):
-            self.index = index
+            self._tiff_frame = tifffile.TiffFrame(parent, index)
 
-            self.parent = parent
+        def get_offset(self):
+            return self._tiff_frame.offset
 
-            self.dataoffsets = ()
-            self.databytecounts = ()
+        def get_index(self):
+            return self._tiff_frame.index
 
-            fh = self.parent.filehandle
-            self.offset = fh.tell()
-            for code, tag in self._gettags({324, 325}):
-                if code == 324:
-                    self.dataoffsets = tag.value
-                elif code == 325:
-                    self.databytecounts = tag.value
+        def get_dataoffsets(self):
+            return self._tiff_frame.dataoffsets
 
-            # get the next offset
-            tiff = self.parent.tiff
-            fh.seek(self.offset)
-            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-            fh.seek(self.offset + tiff.tagnosize + tagno * tiff.tagsize)
-            self.next_offset = struct.unpack(
-                tiff.offsetformat, fh.read(tiff.offsetsize)
-            )[0]
-
-        def _gettags(self, codes={324, 325}):
-            """Return list of (code, TiffTag) from file."""
-            fh = self.parent.filehandle
-            tiff = self.parent.tiff
-            unpack = struct.unpack
-            tags = []
-
-            tagno = unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-
-            tagoffset = self.offset + tiff.tagnosize  # fh.tell()
-            tagsize = tiff.tagsize
-            codeformat = tiff.tagformat1[:2]
-            tagbytes = fh.read(tagsize * tagno)
-
-            have_one_tag = False
-            for tagindex in reversed(range(0, tagno * tagsize, tagsize)):
-                code = unpack(codeformat, tagbytes[tagindex : tagindex + 2])[0]
-                if code not in codes:
-                    continue
-                tag = tifffile.TiffTag.fromfile(
-                    self.parent,
-                    tagoffset + tagindex,
-                    tagbytes[tagindex : tagindex + tagsize],
-                )
-                tags.append((code, tag))
-                if have_one_tag:
-                    break
-                else:
-                    have_one_tag = True
-
-            return tags
+        def get_databytecounts(self):
+            return self._tiff_frame.databytecounts
 
     def _page_offsets_bytes(self, index: int):
         if index == 0:
             return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
-
         parent = self._rdr
 
-        if self._offsets_bytes is None or self._offsets_bytes.index + 1 != index:
+        if self._offsets_bytes is None or self._offsets_bytes.get_index() + 1 != index:
             self._rdr.pages._seek(int(index))
         else:
-            self._rdr.filehandle.seek(self._offsets_bytes.next_offset)
+            self._rdr.filehandle.seek(self._offsets_bytes.get_offset())
 
         obc = self._TiffBytesOffsets(parent, index)
         self._offsets_bytes = obc
 
-        return obc.dataoffsets, obc.databytecounts
+        return obc.get_dataoffsets(), obc.get_databytecounts()
 
     def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
         self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
