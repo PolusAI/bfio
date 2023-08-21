@@ -22,7 +22,6 @@ setup(
         "Documentation": "https://bfio.readthedocs.io/en/latest/",
         "Source": "https://github.com/labshare/bfio",
     },
-    entry_points={"napari.plugin": "bfio = bfio.bfio"},
     packages=find_packages(),
     package_data={"bfio": ["VERSION"]},
     classifiers=[
@@ -30,7 +29,6 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-        "Framework :: napari",
     ],
     python_requires=">=3.6",
     install_requires=[
