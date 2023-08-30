@@ -391,12 +391,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}".format(dimension.upper()),
+                "physical_size_{}".format(dimension.upper()),
                 psize,
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}Unit".format(dimension.upper()),
+                "physical_size_{}_unit".format(dimension.upper()),
                 units,
             )
 
