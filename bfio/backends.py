@@ -1106,7 +1106,10 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     def _write_tiles(self, data, X, Y, Z, C, T):
         assert len(X) == 2 and len(Y) == 2
-
+        if self.frontend._TILE_SIZE != 2**10 :
+            logger.warning(
+                "TILE_SIZE is not set to 1024, tile may save incorrectly."
+            )
         if X[0] % self.frontend._TILE_SIZE != 0 or Y[0] % self.frontend._TILE_SIZE != 0:
             logger.warning(
                 "X or Y positions are not on tile boundary, tile may save incorrectly"
