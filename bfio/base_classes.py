@@ -562,7 +562,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             if dtype == v:
                 self._metadata.images[
                     0
-                ].pixels.type = ome_types.model.simple_types.PixelType(k)
+                ].pixels.type = ome_types.model.PixelType(k)
 
     @property
     def samples_per_pixel(self) -> int:
