@@ -1121,7 +1121,10 @@ class BioWriter(BioBase):
                         image.shape, saving_shape
                     )
                 )
-
+        if X[0] % self._TILE_SIZE != 0 or Y[0] % self._TILE_SIZE != 0:
+            self.logger.warning(
+                "X or Y positions are not on tile boundary, tile may save incorrectly"
+            )
         # Define tile bounds
         X_tile_start = (X[0] // self._TILE_SIZE) * self._TILE_SIZE
         Y_tile_start = (Y[0] // self._TILE_SIZE) * self._TILE_SIZE

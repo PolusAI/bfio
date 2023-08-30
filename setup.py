@@ -35,6 +35,7 @@ setup(
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
         "ome-types>=0.4.2",
+        "tifffile",
     ],
     extras_require={
         "bioformats": ["bioformats_jar==6.7.0.post2"],
