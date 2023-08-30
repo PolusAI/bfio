@@ -345,7 +345,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for channel, cname in (self.metadata.images[0].pixels.channels, cnames):
+        for channel, cname in zip(self.metadata.images[0].pixels.channels, cnames):
             channel.name = cname
 
     @property
