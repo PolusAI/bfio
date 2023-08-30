@@ -30,13 +30,11 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     install_requires=[
-        "tifffile>=2021.8.30,<2022.4.22",
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
-        "ome-types>=0.3.4",
-        "lxml",  # remove this when upgrading to the next version of ome-types
+        "ome-types>=0.4.2",
     ],
     extras_require={
         "bioformats": ["bioformats_jar==6.7.0.post2"],

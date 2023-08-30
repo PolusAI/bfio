@@ -15,8 +15,6 @@ import numpy
 import ome_types
 import re
 from tifffile import tifffile
-from xmlschema.validators.exceptions import XMLSchemaValidationError
-from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -427,13 +425,13 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata, parser="lxml", validate=False
+                    self._rdr.ome_metadata, validate=False
                 )
-            except (XMLSchemaValidationError, XMLSchemaValidateError):
+            except (ET.ParseError):
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(
-                        cleaned, parser="lxml", validate=False
+                        cleaned, validate=False
                     )
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
@@ -1489,13 +1487,13 @@ try:
 
                     try:
                         self._metadata = ome_types.from_xml(
-                            metadata, parser="lxml", validate=False
+                            metadata, validate=False
                         )
-                    except (XMLSchemaValidationError, XMLSchemaValidateError):
+                    except (ET.ParseError):
                         if self.frontend.clean_metadata:
                             cleaned = clean_ome_xml_for_known_issues(metadata)
                             self._metadata = ome_types.from_xml(
-                                cleaned, parser="lxml", validate=False
+                                cleaned, validate=False
                             )
                             self.logger.warning(
                                 "read_metadata(): OME XML required reformatting."
