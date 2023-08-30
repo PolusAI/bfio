@@ -560,9 +560,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert dtype in self._DTYPE.values(), "Invalid data type."
         for k, v in self._DTYPE.items():
             if dtype == v:
-                self._metadata.images[
-                    0
-                ].pixels.type = ome_types.model.PixelType(k)
+                self._metadata.images[0].pixels.type = ome_types.model.PixelType(k)
 
     @property
     def samples_per_pixel(self) -> int:
