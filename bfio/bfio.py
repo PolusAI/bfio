@@ -899,12 +899,12 @@ class BioWriter(BioBase):
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = metadata.copy(deep=True)
+            self._metadata = metadata.model_copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
                 0
-            ].pixels.dimension_order = ome_types.model.pixels.DimensionOrder.XYZCT
+            ].pixels.dimension_order = ome_types.model.Pixels_DimensionOrder.XYZCT
         else:
             self._metadata = self._minimal_xml()
 
@@ -1050,7 +1050,7 @@ class BioWriter(BioBase):
                             samples_per_pixel=1,
                         )
                     ],
-                    type=ome_types.model.simple_types.PixelType.UINT8,
+                    type=ome_types.model.PixelType.UINT8,
                     tiff_data_blocks=[ome_types.model.TiffData()],
                 ),
             )
