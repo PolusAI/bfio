@@ -444,7 +444,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
             self._tiff_frame = tifffile.TiffFrame(parent, index)
 
         def get_offset(self):
-            return self._tiff_frame.offset
+            return self._tiff_frame._nextifd()
 
         def get_index(self):
             return self._tiff_frame.index
@@ -467,7 +467,6 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         obc = self._TiffBytesOffsets(parent, index)
         self._offsets_bytes = obc
-
         return obc.get_dataoffsets(), obc.get_databytecounts()
 
     def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
