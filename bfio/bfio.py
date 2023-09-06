@@ -191,7 +191,7 @@ class BioReader(BioBase):
                 # Initialize the bioreader
                 br = bfio.BioReader('Path/To/File.ome.tif')
 
-                # Load and copy a 100x100 array of pixels
+                # Load and  a 100x100 array of pixels
                 a = br[:100,:100,:1,0,0]
 
                 # Slice steps sizes are ignored for the first 3 indices, so this
@@ -899,7 +899,7 @@ class BioWriter(BioBase):
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = metadata.model_copy(deep=True)
+            self._metadata = metadata.copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
