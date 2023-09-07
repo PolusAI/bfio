@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from pathlib import Path
 
 from setuptools import setup, find_packages
@@ -30,7 +31,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.8",  # Minimum supported version
     install_requires=[
         "tifffile>=2021.8.30,<2022.4.22",
         "imagecodecs>=2021.2.26",
@@ -46,6 +47,9 @@ setup(
             "zarr>=2.6.1",
             "requests>=2.26.0",
             "bioformats_jar==6.7.0.post2",
+            "pre-commit>=3.4.0",
+            "setup-cfg-fmt>=2.4.0",
+            "black>=23.7.0",
         ],
     },
 )

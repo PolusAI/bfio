@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 import logging
 import struct
@@ -570,7 +571,7 @@ class BioReader(BioBase):
 
         return self
 
-    def __iter__(self):  # NOQA:C901
+    def __iter__(self):  # NOQA: C901
         tile_size = self._iter_tile_size
         tile_stride = self._iter_tile_stride
         batch_size = self._iter_batch_size
@@ -703,7 +704,7 @@ class BioReader(BioBase):
             if self._supertile_index.qsize() > 0 and not self._fetch_thread.running():
                 self._fetch_thread = thread_pool.submit(self._fetch)
 
-            # return the curent set of images
+            # return the current set of images
             yield images, index
 
             # get the images from the thread

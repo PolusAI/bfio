@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 from bfio import BioReader, BioWriter
 import math, requests
 from pathlib import Path
 from multiprocessing import cpu_count
 
-""" Get an example image """
+# Get an example image
 # Set up the directories
 PATH = Path("data")
 PATH.mkdir(parents=True, exist_ok=True)
@@ -18,7 +19,7 @@ if not (PATH / FILENAME).exists():
     (PATH / FILENAME).open("wb").write(content)
 
 
-""" Convert the tif to tiled tiff """
+# Convert the tif to tiled tiff
 # Number of tiles to process at a time
 # This value squared is the total number of tiles processed at a time
 tile_grid_size = math.ceil(math.sqrt(cpu_count()))
@@ -29,23 +30,18 @@ tile_size = tile_grid_size * 1024
 
 # Set up the BioReader
 with BioReader(PATH, backend="bioformats", max_workers=cpu_count()) as br:
-
     # Loop through timepoints
     for t in range(br.T):
-
         # Loop through channels
         for c in range(br.C):
-
             with BioWriter(
                 PATH.with_name(f"out_c{c:03}_t{t:03}.ome.tif"),
                 backend="python",
                 metadata=br.metadata,
                 max_workers=cpu_count(),
             ) as bw:
-
                 # Loop through z-slices
                 for z in range(br.Z):
-
                     # Loop across the length of the image
                     for y in range(0, br.Y, tile_size):
                         y_max = min([br.Y, y + tile_size])

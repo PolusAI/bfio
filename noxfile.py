@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Nox automation file."""
 
 from nox import Session, session
