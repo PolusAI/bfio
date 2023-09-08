@@ -132,9 +132,8 @@ class TestSimpleRead(unittest.TestCase):
 
     #         logger.info(I.shape)
 
-    @unittest.expectedFailure
     def test_read_ome_tif_strip_auto(self):
-        """test_read_ome_tif_strip_auto - Expected failure, should load python backend"""
+        """test_read_ome_tif_strip_auto - Read tiff using Java backend"""
         with bfio.BioReader(TEST_DIR.joinpath("img_r001_c001.ome.tif")) as br:
 
             I = br[:]
@@ -149,9 +148,8 @@ class TestSimpleRead(unittest.TestCase):
 
             I = br[:]
 
-    @unittest.expectedFailure
     def test_read_tif_strip_python(self):
-        """test_read_tif_strip_python - Expected failure, read tiff saved in strips"""
+        """test_read_tif_strip_python - Issue warning and switch to Java backend"""
         with bfio.BioReader(
             TEST_DIR.joinpath("img_r001_c001.ome.tif"), backend="python"
         ) as br:

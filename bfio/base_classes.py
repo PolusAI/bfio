@@ -130,7 +130,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
             extension = "".join(self._file_path.suffixes)
             if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
                 self.logger.warning(
-                    "Python backend only works for tiled OME Tiff files, switching to bioformats backend."
+                    "Python backend only works for tiled OME Tiff files,"
+                    + " switching to bioformats backend."
                 )
                 backend = "bioformats"
             else:
@@ -138,8 +139,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
                 # check if it satifies all the condition for python backend
                 if not python_backend_support():
                     self.logger.warning(
-                        "Python backend only works for tiled OME Tiff files with minimum tile size"
-                        + "of 1024x1024, switching to bioformats backend."
+                        "Python backend only works for tiled OME Tiff files with "
+                        + "minimum tile size of 1024x1024, switching to bioformats"
+                        + " backend."
                     )
                     backend = "bioformats"
 
@@ -147,7 +149,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
             # check if it is a directory
             if not os.path.is_dir(self._file_path):
                 self.logger.warning(
-                    "Zarr backend is selected but the path is not a directory, switching to bioformats backend."
+                    "Zarr backend is selected but the path is not a directory,"
+                    + " switching to bioformats backend."
                 )
                 backend = "bioformats"
 
