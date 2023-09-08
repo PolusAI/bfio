@@ -113,8 +113,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path = Path(file_path)
         self._file_path = file_path
 
-        def python_backend_support(path: typing.Union[str, Path]):
-            with tifffile.TiffFile(path) as tif:
+        def python_backend_support():
+            with tifffile.TiffFile(self._file_path) as tif:
                 if not tif.pages[0].is_tiled:
                     return False
                 else:
@@ -155,7 +155,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             extension = "".join(self._file_path.suffixes)
             if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
                 # # check if it satifies all the condition for python backend
-                if python_backend_support(self._file_path):
+                if python_backend_support():
                     backend = "python"
                 else:
                     backend = "bioformats"
