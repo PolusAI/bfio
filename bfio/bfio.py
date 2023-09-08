@@ -11,9 +11,10 @@ import ome_types
 from bfio import backends
 from bfio.base_classes import BioBase
 
-try:
-    from bioformats_jar import get_loci
+import jpype
+import scyjava
 
+try:
     def start() -> str:
         """Start the jvm.
 
@@ -25,7 +26,10 @@ try:
         """
 
         global JAR_VERSION
-        loci = get_loci()
+        scyjava.config.endpoints.append('ome:formats-gpl:6.7.0')
+        scyjava.start_jvm()
+        loci = jpype.JPackage("loci")
+        loci.common.DebugTools.setRootLevel("ERROR")        
         JAR_VERSION = loci.formats.FormatTools.VERSION
 
         logging.getLogger("bfio.start").info(

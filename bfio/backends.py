@@ -1201,7 +1201,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
 
 try:
-    from bioformats_jar import get_loci
+    import scyjava
     import jpype
     import jpype.imports
     from jpype.types import JString
@@ -1213,7 +1213,12 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            loci = get_loci()
+            global JAR_VERSION
+            scyjava.config.endpoints.append('ome:formats-gpl:6.7.0')
+            scyjava.start_jvm()
+            loci = jpype.JPackage("loci")
+            loci.common.DebugTools.setRootLevel("ERROR")        
+            JAR_VERSION = loci.formats.FormatTools.VERSION
 
             global ImageReader
             ImageReader = loci.formats.ImageReader

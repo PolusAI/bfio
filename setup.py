@@ -37,15 +37,14 @@ setup(
         "numpy>=1.20.1",
         "ome-types>=0.3.4",
         "lxml",  # remove this when upgrading to the next version of ome-types
+        "zarr>=2.6.1",
+        "scyjava",
+        "jpype",
     ],
     extras_require={
-        "bioformats": ["bioformats_jar==6.7.0.post2"],
-        "zarr": ["zarr>=2.6.1"],
-        "all": ["zarr>=2.6.1", "bioformats_jar==6.7.0.post2"],
         "dev": [
-            "zarr>=2.6.1",
             "requests>=2.26.0",
-            "bioformats_jar==6.7.0.post2",
+            "pre-commit",
         ],
     },
 )
