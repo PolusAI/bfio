@@ -39,12 +39,11 @@ setup(
         "lxml",  # remove this when upgrading to the next version of ome-types
         "zarr>=2.6.1",
         "scyjava",
-        "jpype",
+        "jpype1",
     ],
     extras_require={
         "dev": [
             "requests>=2.26.0",
-            "pre-commit",
         ],
     },
 )

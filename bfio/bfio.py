@@ -15,6 +15,7 @@ import jpype
 import scyjava
 
 try:
+
     def start() -> str:
         """Start the jvm.
 
@@ -26,10 +27,10 @@ try:
         """
 
         global JAR_VERSION
-        scyjava.config.endpoints.append('ome:formats-gpl:6.7.0')
+        scyjava.config.endpoints.append("ome:formats-gpl:6.7.0")
         scyjava.start_jvm()
         loci = jpype.JPackage("loci")
-        loci.common.DebugTools.setRootLevel("ERROR")        
+        loci.common.DebugTools.setRootLevel("ERROR")
         JAR_VERSION = loci.formats.FormatTools.VERSION
 
         logging.getLogger("bfio.start").info(
