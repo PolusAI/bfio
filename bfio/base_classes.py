@@ -136,7 +136,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             else:
                 # extension is ome.tiff or ome.tif, check if it is tiled or not
                 # check if it satifies all the condition for python backend
-                if not python_backend_support(self._file_path):
+                if not python_backend_support():
                     self.logger.warning(
                         "Python backend only works for tiled OME Tiff files with minimum tile size"
                         + "of 1024x1024, switching to bioformats backend."
