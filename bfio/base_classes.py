@@ -345,7 +345,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for channel, cname in (self.metadata.images[0].pixels.channels, cnames):
+        for channel, cname in zip(self.metadata.images[0].pixels.channels, cnames):
             channel.name = cname
 
     @property
@@ -391,12 +391,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}".format(dimension.upper()),
+                "physical_size_{}".format(dimension.upper()),
                 psize,
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}Unit".format(dimension.upper()),
+                "physical_size_{}_unit".format(dimension.upper()),
                 units,
             )
 
@@ -560,9 +560,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert dtype in self._DTYPE.values(), "Invalid data type."
         for k, v in self._DTYPE.items():
             if dtype == v:
-                self._metadata.images[
-                    0
-                ].pixels.type = ome_types.model.simple_types.PixelType(k)
+                self._metadata.images[0].pixels.type = ome_types.model.PixelType(k)
 
     @property
     def samples_per_pixel(self) -> int:

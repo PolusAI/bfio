@@ -24,7 +24,6 @@ if "-v" in sys.argv:
 
 
 def setUpModule():
-
     """Download images for testing"""
     TEST_DIR.mkdir(exist_ok=True)
 
@@ -38,10 +37,8 @@ def setUpModule():
             r = requests.get(url)
 
             with open(TEST_DIR.joinpath(file), "wb") as fw:
-
                 fw.write(r.content)
         else:
-
             base_path = TEST_DIR.joinpath(file)
             base_path.mkdir()
             base_path.joinpath("0").mkdir()
@@ -56,12 +53,10 @@ def setUpModule():
             ]
 
             for u in units:
-
                 if base_path.joinpath(u).exists():
                     continue
 
                 with open(base_path.joinpath(u), "wb") as fw:
-
                     fw.write(requests.get(url + u).content)
 
 
@@ -80,7 +75,6 @@ class TestSimpleRead(unittest.TestCase):
         with bfio.BioReader(
             TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
         ) as br:
-
             np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
 
     def test_bioformats(self):
@@ -99,7 +93,6 @@ class TestSimpleRead(unittest.TestCase):
         with bfio.BioReader(
             TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
         ) as br:
-
             self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
@@ -117,7 +110,6 @@ class TestSimpleRead(unittest.TestCase):
     def test_read_tif_strip_auto(self):
         """test_read_tif_strip_auto - Read tiff saved in strips, should load bioformats backend"""
         with bfio.BioReader(TEST_DIR.joinpath("0.tif")) as br:
-
             self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
@@ -136,7 +128,6 @@ class TestSimpleRead(unittest.TestCase):
     def test_read_ome_tif_strip_auto(self):
         """test_read_ome_tif_strip_auto - Expected failure, should load python backend"""
         with bfio.BioReader(TEST_DIR.joinpath("img_r001_c001.ome.tif")) as br:
-
             I = br[:]
 
     def test_read_tif_strip_bioformats(self):
@@ -144,7 +135,6 @@ class TestSimpleRead(unittest.TestCase):
         with bfio.BioReader(
             TEST_DIR.joinpath("img_r001_c001.ome.tif"), backend="bioformats"
         ) as br:
-
             self.assertEqual(br._backend_name, "bioformats")
 
             I = br[:]
@@ -155,7 +145,6 @@ class TestSimpleRead(unittest.TestCase):
         with bfio.BioReader(
             TEST_DIR.joinpath("img_r001_c001.ome.tif"), backend="python"
         ) as br:
-
             I = br[:]
 
 
