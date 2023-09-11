@@ -107,20 +107,23 @@ class TestOmeTiffWrite(unittest.TestCase):
             bw.shape = image.shape
             bw.dtype = image.dtype
 
-    # def test_write_java(self):
-    #     # Cannot write an image with channel information using python backend
+    def test_write_java(self):
+        # Cannot write an image with channel information using python backend
 
-    #     with bfio.BioWriter("4d_array.ome.tif", backend="bioformats") as bw:
+        print("writing image")
+        with bfio.BioWriter("4d_array_1.ome.tif", backend="bioformats") as bw:
 
-    #         image = np.load(TEST_DIR.joinpath("4d_array.npy"))
+            image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
-    #         bw.shape = image.shape
-    #         bw.dtype = image.dtype
+            bw.shape = image.shape
+            bw.dtype = image.dtype
 
-    #         bw[:] = image
+            bw[:] = image
 
-    #     with bfio.BioReader("4d_array.ome.tif", backend="python") as br:
+        print("reading image")
 
-    #         reconstructed = br[:]
+        with bfio.BioReader("4d_array_1.ome.tif", backend="python") as br:
 
-    #     assert np.array_equal(image, reconstructed)
+            reconstructed = br[:]
+
+        assert np.array_equal(image, reconstructed)
