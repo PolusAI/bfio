@@ -6,9 +6,11 @@ on:
 
 jobs:
   unittest:
-    name: unittest
-    runs-on: ubuntu-latest
-
+    name: Run unit tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-11, windows-latest]
     steps:
       - name: Checkout 🛎️
         uses: actions/checkout@v3
@@ -20,8 +22,6 @@ jobs:
 
       - name: Install dependencies 🔧
         run: |
-          sudo apt update
-          sudo apt install openjdk-11-jdk -y
           python -m pip install --upgrade pip
           python -m pip install ome-types==0.3.4
           python -m pip install xmlschema
