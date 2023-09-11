@@ -79,22 +79,22 @@ class TestOmeTiffWrite(unittest.TestCase):
 
             np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
 
-    # def test_write_python(self):
+    def test_write_python(self):
 
-    #     with bfio.BioWriter("4d_array.ome.tif") as bw:
+        with bfio.BioWriter("4d_array.ome.tif") as bw:
 
-    #         image = np.load(TEST_DIR.joinpath("4d_array.npy"))
+            image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
-    #         bw.shape = image.shape[:3]
-    #         bw.dtype = image.dtype
+            bw.shape = image.shape[:3]
+            bw.dtype = image.dtype
 
-    #         bw[:] = image[:, :, :, 0]
+            bw[:] = image[:, :, :, 0]
 
-    #     with bfio.BioReader("4d_array.ome.tif", backend="python") as br:
+        with bfio.BioReader("4d_array.ome.tif", backend="python") as br:
 
-    #         reconstructed = br[:]
+            reconstructed = br[:]
 
-    #     assert np.array_equal(image[..., 0], reconstructed)
+        assert np.array_equal(image[..., 0], reconstructed)
 
     @unittest.expectedFailure
     def test_write_channels_python(self):
