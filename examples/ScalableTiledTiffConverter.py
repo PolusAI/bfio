@@ -29,23 +29,18 @@ tile_size = tile_grid_size * 1024
 
 # Set up the BioReader
 with BioReader(PATH, backend="bioformats", max_workers=cpu_count()) as br:
-
     # Loop through timepoints
     for t in range(br.T):
-
         # Loop through channels
         for c in range(br.C):
-
             with BioWriter(
                 PATH.with_name(f"out_c{c:03}_t{t:03}.ome.tif"),
                 backend="python",
                 metadata=br.metadata,
                 max_workers=cpu_count(),
             ) as bw:
-
                 # Loop through z-slices
                 for z in range(br.Z):
-
                     # Loop across the length of the image
                     for y in range(0, br.Y, tile_size):
                         y_max = min([br.Y, y + tile_size])

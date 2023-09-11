@@ -196,7 +196,7 @@ class BioReader(BioBase):
                 # Initialize the bioreader
                 br = bfio.BioReader('Path/To/File.ome.tif')
 
-                # Load and copy a 100x100 array of pixels
+                # Load and  a 100x100 array of pixels
                 a = br[:100,:100,:1,0,0]
 
                 # Slice steps sizes are ignored for the first 3 indices, so this
@@ -909,7 +909,7 @@ class BioWriter(BioBase):
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
                 0
-            ].pixels.dimension_order = ome_types.model.pixels.DimensionOrder.XYZCT
+            ].pixels.dimension_order = ome_types.model.Pixels_DimensionOrder.XYZCT
         else:
             self._metadata = self._minimal_xml()
 
@@ -1055,7 +1055,7 @@ class BioWriter(BioBase):
                             samples_per_pixel=1,
                         )
                     ],
-                    type=ome_types.model.simple_types.PixelType.UINT8,
+                    type=ome_types.model.PixelType.UINT8,
                     tiff_data_blocks=[ome_types.model.TiffData()],
                 ),
             )
@@ -1126,7 +1126,10 @@ class BioWriter(BioBase):
                         image.shape, saving_shape
                     )
                 )
-
+        if X[0] % self._TILE_SIZE != 0 or Y[0] % self._TILE_SIZE != 0:
+            self.logger.warning(
+                "X or Y positions are not on tile boundary, tile may save incorrectly"
+            )
         # Define tile bounds
         X_tile_start = (X[0] // self._TILE_SIZE) * self._TILE_SIZE
         Y_tile_start = (Y[0] // self._TILE_SIZE) * self._TILE_SIZE
