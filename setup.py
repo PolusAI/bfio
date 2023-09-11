@@ -35,16 +35,14 @@ setup(
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",
         "ome-types>=0.4.2",
+        "zarr>=2.6.1",
+        "scyjava",
+        "jpype1",
         "tifffile",
     ],
     extras_require={
-        "bioformats": ["bioformats_jar==6.7.0.post2"],
-        "zarr": ["zarr>=2.6.1"],
-        "all": ["zarr>=2.6.1", "bioformats_jar==6.7.0.post2"],
         "dev": [
-            "zarr>=2.6.1",
             "requests>=2.26.0",
-            "bioformats_jar==6.7.0.post2",
         ],
     },
 )
