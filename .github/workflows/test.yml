@@ -28,4 +28,4 @@ jobs:
           pip install .[dev]
       - name: Test with unittest
         run: |
-          python -m unittest
+          python -m unittest -v
