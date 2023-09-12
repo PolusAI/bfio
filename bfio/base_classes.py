@@ -312,12 +312,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
                         # If no z-match could be found, find a channel match and modify
                         elif len(cp) > 0:
-                            zp = ome_types.model.Plane(**cp[0].dict())
+                            zp = ome_types.model.Plane(**cp[0].model_dump())
                             zp.the_z = z
 
                         # If no channel match, try to find a timepoint match and modify
                         elif len(tp) > 0:
-                            zp = ome_types.model.Plane(**tp[0].dict())
+                            zp = ome_types.model.Plane(**tp[0].model_dump())
                             zp.the_c = c
                             zp.the_z = z
 
