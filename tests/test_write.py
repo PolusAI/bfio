@@ -115,10 +115,10 @@ class TestOmeTiffWrite(unittest.TestCase):
 
             image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
-            # bw.shape = image.shape
-            # bw.dtype = image.dtype
+            bw.shape = image.shape
+            bw.dtype = image.dtype
 
-            # bw[:] = image
+            bw[:] = image
 
         assert True
         # print("reading image")
