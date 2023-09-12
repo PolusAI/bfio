@@ -6,8 +6,11 @@ on:
 
 jobs:
   unittest:
-    name: unittest
-    runs-on: ubuntu-latest
+    name: Run unit tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-12, windows-latest]
 
     steps:
       - name: Checkout 🛎️
@@ -20,10 +23,8 @@ jobs:
 
       - name: Install dependencies 🔧
         run: |
-          sudo apt update
-          sudo apt install openjdk-11-jdk -y
           python -m pip install --upgrade pip
           pip install .[dev]
       - name: Test with unittest
         run: |
-          python -m unittest
+          python -m unittest -v
