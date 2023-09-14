@@ -18,12 +18,9 @@ jobs:
         with:
           python-version: 3.9
 
-      - name: Install dependencies 🔧
+      - name: Install bfio 🔧
         run: |
-          sudo apt update
-          sudo apt install openjdk-11-jdk -y
-          python -m pip install --upgrade pip
           pip install .[dev]
       - name: Test with unittest
         run: |
-          python -m unittest
+          python -m unittest -v
