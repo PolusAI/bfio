@@ -114,15 +114,17 @@ class BioBase(object, metaclass=abc.ABCMeta):
         self._file_path = file_path
 
         def python_backend_support():
-            with tifffile.TiffFile(self._file_path) as tif:
-                if not tif.pages[0].is_tiled:
-                    return False
-                else:
-                    if (
-                        tif.pages[0].tilewidth < self._TILE_SIZE
-                        or tif.pages[0].tilewidth < self._TILE_SIZE
-                    ):
+            # don't bother checking if file does not exist
+            if Path(self._file_path).is_file():
+                with tifffile.TiffFile(self._file_path) as tif:
+                    if not tif.pages[0].is_tiled:
                         return False
+                    else:
+                        if (
+                            tif.pages[0].tilewidth < self._TILE_SIZE
+                            or tif.pages[0].tilewidth < self._TILE_SIZE
+                        ):
+                            return False
             return True
 
         # validate/set the backend
@@ -147,7 +149,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
         if backend == "zarr":
             # check if it is a directory
-            if not os.path.is_dir(self._file_path):
+            if not Path.is_dir(self._file_path):
                 self.logger.warning(
                     "Zarr backend is selected but the path is not a directory,"
                     + " switching to bioformats backend."
