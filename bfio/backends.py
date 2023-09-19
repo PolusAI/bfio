@@ -1460,24 +1460,31 @@ try:
                 return self._metadata
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
-                omexml = ome_types.model.OME.construct()
-                omexml.images[0].Name = Path(self.frontend._file_path).name
-                p = omexml.images[0].Pixels
+                omexml = ome_types.model.OME.model_construct()
+                ome_dtype = self._rdr[0].dtype.name
+                # this is speculation, since each array in a gruop, in theory,
+                # can have distinct properties
+                ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+                ome_pixel = ome_types.model.Pixels(
+                    dimension_order=ome_dim_order,
+                    big_endian=False,
+                    size_x=self._rdr[0].shape[4],
+                    size_y=self._rdr[0].shape[3],
+                    size_z=self._rdr[0].shape[2],
+                    size_c=self._rdr[0].shape[1],
+                    size_t=self._rdr[0].shape[0],
+                    channels=[],
+                    type=ome_dtype,
+                )
 
-                for i, d in enumerate("XYZCT"):
-                    setattr(p, "Size{}".format(d), self._rdr.shape[4 - i])
+                for i in range(ome_pixel.size_c):
+                    ome_pixel.channels.append(ome_types.model.Channel())
 
-                p.channel_count = p.SizeC
-                for i in range(0, p.SizeC):
-                    p.Channel(i).Name = ""
-
-                p.DimensionOrder = ome_types.model.pixels.DimensionOrder.XYZCT
-
-                dtype = numpy.dtype(self._rdr.dtype.name).type
-                for k, v in self.frontend._DTYPE.items():
-                    if dtype == v:
-                        p.PixelType = k
-                        break
+                omexml.images.append(
+                    ome_types.model.Image(
+                        name=Path(self.frontend._file_path).name, pixels=ome_pixel
+                    )
+                )
 
                 return omexml
 
