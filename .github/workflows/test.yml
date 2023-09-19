@@ -6,8 +6,11 @@ on:
 
 jobs:
   unittest:
-    name: unittest
-    runs-on: ubuntu-latest
+    name: Run unit tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-12, windows-latest]
 
     steps:
       - name: Checkout 🛎️
