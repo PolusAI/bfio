@@ -22,7 +22,6 @@ if not (PATH / FILENAME).exists():
 with BioReader(PATH / FILENAME, backend="bioformats") as br, BioWriter(
     PATH / "out.ome.tif", metadata=br.metadata, backend="python"
 ) as bw:
-
     # Print off some information about the image before loading it
     print("br.shape: {}".format(br.shape))
     print("br.dtype: {}".format(br.dtype))

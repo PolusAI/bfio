@@ -15,8 +15,6 @@ import numpy
 import ome_types
 import re
 from tifffile import tifffile
-from xmlschema.validators.exceptions import XMLSchemaValidationError
-from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -427,14 +425,12 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata, parser="lxml", validate=False
+                    self._rdr.ome_metadata, validate=False
                 )
-            except (XMLSchemaValidationError, XMLSchemaValidateError):
+            except ET.ParseError:
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
-                    self._metadata = ome_types.from_xml(
-                        cleaned, parser="lxml", validate=False
-                    )
+                    self._metadata = ome_types.from_xml(cleaned, validate=False)
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
                     )
@@ -443,79 +439,35 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         return self._metadata
 
-    class _TiffBytesOffsets(tifffile.TiffFrame):
+    class _TiffBytesOffsets:
         def __init__(self, parent, index):
-            self.index = index
+            self._tiff_frame = tifffile.TiffFrame(parent, index)
 
-            self.parent = parent
+        def get_offset(self):
+            return self._tiff_frame._nextifd()
 
-            self.dataoffsets = ()
-            self.databytecounts = ()
+        def get_index(self):
+            return self._tiff_frame.index
 
-            fh = self.parent.filehandle
-            self.offset = fh.tell()
-            for code, tag in self._gettags({324, 325}):
-                if code == 324:
-                    self.dataoffsets = tag.value
-                elif code == 325:
-                    self.databytecounts = tag.value
+        def get_dataoffsets(self):
+            return self._tiff_frame.dataoffsets
 
-            # get the next offset
-            tiff = self.parent.tiff
-            fh.seek(self.offset)
-            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-            fh.seek(self.offset + tiff.tagnosize + tagno * tiff.tagsize)
-            self.next_offset = struct.unpack(
-                tiff.offsetformat, fh.read(tiff.offsetsize)
-            )[0]
-
-        def _gettags(self, codes={324, 325}):
-            """Return list of (code, TiffTag) from file."""
-            fh = self.parent.filehandle
-            tiff = self.parent.tiff
-            unpack = struct.unpack
-            tags = []
-
-            tagno = unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-
-            tagoffset = self.offset + tiff.tagnosize  # fh.tell()
-            tagsize = tiff.tagsize
-            codeformat = tiff.tagformat1[:2]
-            tagbytes = fh.read(tagsize * tagno)
-
-            have_one_tag = False
-            for tagindex in reversed(range(0, tagno * tagsize, tagsize)):
-                code = unpack(codeformat, tagbytes[tagindex : tagindex + 2])[0]
-                if code not in codes:
-                    continue
-                tag = tifffile.TiffTag.fromfile(
-                    self.parent,
-                    tagoffset + tagindex,
-                    tagbytes[tagindex : tagindex + tagsize],
-                )
-                tags.append((code, tag))
-                if have_one_tag:
-                    break
-                else:
-                    have_one_tag = True
-
-            return tags
+        def get_databytecounts(self):
+            return self._tiff_frame.databytecounts
 
     def _page_offsets_bytes(self, index: int):
         if index == 0:
             return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
-
         parent = self._rdr
 
-        if self._offsets_bytes is None or self._offsets_bytes.index + 1 != index:
+        if self._offsets_bytes is None or self._offsets_bytes.get_index() + 1 != index:
             self._rdr.pages._seek(int(index))
         else:
-            self._rdr.filehandle.seek(self._offsets_bytes.next_offset)
+            self._rdr.filehandle.seek(self._offsets_bytes.get_offset())
 
         obc = self._TiffBytesOffsets(parent, index)
         self._offsets_bytes = obc
-
-        return obc.dataoffsets, obc.databytecounts
+        return obc.get_dataoffsets(), obc.get_databytecounts()
 
     def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
         self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
@@ -1108,7 +1060,8 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     def _write_tiles(self, data, X, Y, Z, C, T):
         assert len(X) == 2 and len(Y) == 2
-
+        if self.frontend._TILE_SIZE != 2**10:
+            logger.warning("TILE_SIZE is not set to 1024, tile may save incorrectly.")
         if X[0] % self.frontend._TILE_SIZE != 0 or Y[0] % self.frontend._TILE_SIZE != 0:
             logger.warning(
                 "X or Y positions are not on tile boundary, tile may save incorrectly"
@@ -1201,7 +1154,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
 
 try:
-    from bioformats_jar import get_loci
+    import scyjava
     import jpype
     import jpype.imports
     from jpype.types import JString
@@ -1213,7 +1166,12 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            loci = get_loci()
+            global JAR_VERSION
+            scyjava.config.endpoints.append("ome:formats-gpl:6.7.0")
+            scyjava.start_jvm()
+            loci = jpype.JPackage("loci")
+            loci.common.DebugTools.setRootLevel("ERROR")
+            JAR_VERSION = loci.formats.FormatTools.VERSION
 
             global ImageReader
             ImageReader = loci.formats.ImageReader
@@ -1488,15 +1446,11 @@ try:
                         metadata = fr.read()
 
                     try:
-                        self._metadata = ome_types.from_xml(
-                            metadata, parser="lxml", validate=False
-                        )
-                    except (XMLSchemaValidationError, XMLSchemaValidateError):
+                        self._metadata = ome_types.from_xml(metadata, validate=False)
+                    except ET.ParseError:
                         if self.frontend.clean_metadata:
                             cleaned = clean_ome_xml_for_known_issues(metadata)
-                            self._metadata = ome_types.from_xml(
-                                cleaned, parser="lxml", validate=False
-                            )
+                            self._metadata = ome_types.from_xml(cleaned, validate=False)
                             self.logger.warning(
                                 "read_metadata(): OME XML required reformatting."
                             )
