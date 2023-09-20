@@ -1227,7 +1227,7 @@ try:
             ):
                 interleaved = True
 
-            prev_read_cached_loc = (0, 0, 0, 0, 0)
+            prev_read_cached_loc = None
             cached_read_data = None
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
