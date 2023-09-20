@@ -1216,14 +1216,18 @@ try:
         def _read_image(self, X, Y, Z, C, T, output):
             out = self._image
             pseudo_interleaved = any(
-                channel.samples_per_pixel > 1 for channel in self.frontend.metadata.images[0].pixels.channels
+                channel.samples_per_pixel > 1
+                for channel in self.frontend.metadata.images[0].pixels.channels
             )
 
             interleaved = False
-            if self.frontend.metadata.images[0].pixels.interleaved or pseudo_interleaved:
+            if (
+                self.frontend.metadata.images[0].pixels.interleaved
+                or pseudo_interleaved
+            ):
                 interleaved = True
 
-            prev_read_cached_loc = (0,0,0,0,0)
+            prev_read_cached_loc = (0, 0, 0, 0, 0)
             cached_read_data = None
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
@@ -1258,7 +1262,7 @@ try:
                                 # For now, we are adding some basic caching
                                 if self._rdr.getFormat() not in ["Zeiss CZI"]:
                                     if interleaved:
-                                        image = image[c::self.frontend.spp]
+                                        image = image[c :: self.frontend.spp]
                                         image = image.reshape(y_range, x_range)
                                     else:
                                         image = image.reshape(
