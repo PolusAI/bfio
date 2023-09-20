@@ -1215,7 +1215,16 @@ try:
 
         def _read_image(self, X, Y, Z, C, T, output):
             out = self._image
+            pseudo_interleaved = any(
+                channel.samples_per_pixel > 1 for channel in self.frontend.metadata.images[0].pixels.channels
+            )
 
+            interleaved = False
+            if self.frontend.metadata.images[0].pixels.interleaved or pseudo_interleaved:
+                interleaved = True
+
+            prev_read_cached_loc = (0,0,0,0,0)
+            cached_read_data = None
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
@@ -1228,24 +1237,33 @@ try:
                             y_max = min([Y[1], self.frontend.Y])
                             for y in range(Y[0], y_max, self._chunk_size):
                                 y_range = min([self._chunk_size, y_max - y])
+                                current_read_loc = (index, x, y, x_range, y_range)
+                                if current_read_loc != prev_read_cached_loc:
+                                    tmp_read = self._rdr.openBytes(
+                                        index, x, y, x_range, y_range
+                                    )
+                                    cached_read_data = numpy.frombuffer(
+                                        bytes(tmp_read),
+                                        self.frontend.dtype,
+                                    )
+                                    prev_read_cached_loc = current_read_loc
 
-                                image = self._rdr.openBytes(
-                                    index, x, y, x_range, y_range
-                                )
-                                image = numpy.frombuffer(
-                                    bytes(image),
-                                    self.frontend.dtype,
-                                )
-
+                                image = cached_read_data
                                 # TODO: This should be changed in the future
                                 # This reloads all channels for a tile on each
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
+
+                                # For now, we are adding some basic caching
                                 if self._rdr.getFormat() not in ["Zeiss CZI"]:
-                                    image = image.reshape(
-                                        self.frontend.spp, y_range, x_range
-                                    )[c % self.frontend.spp, ...]
+                                    if interleaved:
+                                        image = image[c::self.frontend.spp]
+                                        image = image.reshape(y_range, x_range)
+                                    else:
+                                        image = image.reshape(
+                                            self.frontend.spp, y_range, x_range
+                                        )[c % self.frontend.spp, ...]
                                 else:
                                     image = image.reshape(
                                         y_range, x_range, self.frontend.spp
@@ -1320,7 +1338,7 @@ try:
                     channel.samples_per_pixel = 1
 
                     for c in range(expand_channels):
-                        new_channel = ome_types.model.Channel(**channel.dict())
+                        new_channel = ome_types.model.Channel(**channel.model_dump())
                         new_channel.id = channel.id + f":{c}"
                         image.pixels.channels.append(new_channel)
 
