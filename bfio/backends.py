@@ -1227,8 +1227,8 @@ try:
             ):
                 interleaved = True
 
-            prev_read_cached_loc = None
-            cached_read_data = None
+            self._prev_read_cached_loc = None
+            self._cached_read_data = None
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
@@ -1242,17 +1242,17 @@ try:
                             for y in range(Y[0], y_max, self._chunk_size):
                                 y_range = min([self._chunk_size, y_max - y])
                                 current_read_loc = (index, x, y, x_range, y_range)
-                                if current_read_loc != prev_read_cached_loc:
+                                if current_read_loc != self._prev_read_cached_loc:
                                     tmp_read = self._rdr.openBytes(
                                         index, x, y, x_range, y_range
                                     )
-                                    cached_read_data = numpy.frombuffer(
+                                    self._cached_read_data = numpy.frombuffer(
                                         bytes(tmp_read),
                                         self.frontend.dtype,
                                     )
-                                    prev_read_cached_loc = current_read_loc
+                                    self._prev_read_cached_loc = current_read_loc
 
-                                image = cached_read_data
+                                image = self._cached_read_data
                                 # TODO: This should be changed in the future
                                 # This reloads all channels for a tile on each
                                 # loop. Ideally, there would be some better
