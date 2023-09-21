@@ -1154,7 +1154,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
 
 try:
-    import scyjava
     import jpype
     import jpype.imports
     from jpype.types import JString
