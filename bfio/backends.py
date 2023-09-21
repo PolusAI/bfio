@@ -1166,24 +1166,20 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            global JAR_VERSION
-            scyjava.config.endpoints.append("ome:formats-gpl:6.7.0")
-            scyjava.start_jvm()
-            loci = jpype.JPackage("loci")
-            loci.common.DebugTools.setRootLevel("ERROR")
-            JAR_VERSION = loci.formats.FormatTools.VERSION
+            if not jpype.isJVMStarted():
+                bfio.start()
 
             global ImageReader
-            ImageReader = loci.formats.ImageReader
+            from loci.formats import ImageReader
 
             global ServiceFactory
-            ServiceFactory = loci.common.services.ServiceFactory
+            from loci.common.services import ServiceFactory
 
             global OMEXMLService
-            OMEXMLService = loci.formats.services.OMEXMLService
+            from loci.formats.services import OMEXMLService
 
             global IMetadata
-            IMetadata = loci.formats.meta.IMetadata
+            from loci.formats.meta import IMetadata
 
             JavaReader._classes_loaded = True
 
