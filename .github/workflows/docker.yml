@@ -26,8 +26,8 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v1
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
+          username: ${{ secrets.DOCKER_USERNAME_SAMEE }}
+          password: ${{ secrets.DOCKER_TOKEN_SAMEE }}
 
       - name: Publish Base Container 🐳
         uses: docker/build-push-action@v2
@@ -35,7 +35,7 @@ jobs:
           context: .
           file: ./docker/base/Dockerfile
           push: true
-          tags: polusai/bfio:${{ steps.get_version.outputs.version }}
+          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}
 
       - name: Publish Tensorflow Container 🐳
         uses: docker/build-push-action@v2
@@ -43,7 +43,7 @@ jobs:
           context: .
           file: ./docker/tensorflow/Dockerfile
           push: true
-          tags: polusai/bfio:${{ steps.get_version.outputs.version }}-tensorflow
+          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}-tensorflow
 
       - name: Publish ImageJ Container 🐳
         uses: docker/build-push-action@v2
@@ -51,4 +51,4 @@ jobs:
           context: .
           file: ./docker/imagej/Dockerfile
           push: true
-          tags: polusai/bfio:${{ steps.get_version.outputs.version }}-imagej
+          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}-imagej
