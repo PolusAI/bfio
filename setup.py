@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from pathlib import Path
 
 from setuptools import setup, find_packages
@@ -30,7 +31,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",  # Minimum supported version
     install_requires=[
         "imagecodecs>=2021.2.26",
         "numpy>=1.20.1",

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import unittest
 import requests, io, pathlib, shutil, logging, sys
 import bfio

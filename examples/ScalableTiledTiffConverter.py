@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 from bfio import BioReader, BioWriter
 import math, requests
 from pathlib import Path
 from multiprocessing import cpu_count
 
-""" Get an example image """
+# Get an example image
 # Set up the directories
 PATH = Path("data")
 PATH.mkdir(parents=True, exist_ok=True)
@@ -18,7 +19,7 @@ if not (PATH / FILENAME).exists():
     (PATH / FILENAME).open("wb").write(content)
 
 
-""" Convert the tif to tiled tiff """
+# Convert the tif to tiled tiff
 # Number of tiles to process at a time
 # This value squared is the total number of tiles processed at a time
 tile_grid_size = math.ceil(math.sqrt(cpu_count()))

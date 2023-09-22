@@ -17,7 +17,7 @@ bfio.BioReader
 
     .. py:method:: Y
         :property:
-        
+
         :setter: Y is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
         :getter: Number of pixels in the y-dimension (height)
@@ -25,7 +25,7 @@ bfio.BioReader
 
     .. py:method:: Z
         :property:
-        
+
         :setter: Z is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
         :getter: Number of pixels in the z-dimension (depth)
@@ -33,7 +33,7 @@ bfio.BioReader
 
     .. py:method:: C
         :property:
-        
+
         :setter: C is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
         :getter: Number of pixels in the c-dimension
@@ -41,7 +41,7 @@ bfio.BioReader
 
     .. py:method:: T
         :property:
-        
+
         :setter: T is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
         :getter: Number of pixels in the t-dimension

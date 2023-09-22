@@ -30,7 +30,7 @@ Docker containers with all necessary components are available (see
 ### Setting up Java
 
 **Note:** `bfio` can be used without Java, but only the `python` and `zarr`
-backends will be useable. Only files in tiled OME Tiff or OME Zarr format can be
+backends will be usable. Only files in tiled OME Tiff or OME Zarr format can be
 read/written.
 
 In order to use the `Java` backend, it is necessary to first install the JDK.
@@ -63,7 +63,7 @@ Same as above, except comes with ImageJ and PyImageJ.
 
 ### labshare/polus-bfio-util:2.3.1-tensorflow
 
-Tensorflow container with bfio isntalled.
+Tensorflow container with bfio installed.
 
 ## Documentation
 
@@ -87,7 +87,7 @@ Creative Commons License - see the [LICENSE](LICENSE) file for details.
 
 **NOTE**
 
-Bioformats is licensed under GPL, and as a consequence so is the `bioformats_jar` 
+Bioformats is licensed under GPL, and as a consequence so is the `bioformats_jar`
 package. These packages and libraries are installed when using the `bfio[bioformats]` option.
 
 ## Acknowledgments
