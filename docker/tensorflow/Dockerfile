@@ -1,5 +1,5 @@
 # Get Linux
-FROM tensorflow/tensorflow:2.4.1-gpu
+FROM tensorflow/tensorflow:2.13.0-gpu
 
 # Polus platform file extension
 ENV POLUS_EXT=".ome.tif"
