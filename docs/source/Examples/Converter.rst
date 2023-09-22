@@ -26,7 +26,7 @@ The advantage to using the ``python`` and ``zarr`` backends are speed and
 scalability at the expense of a rigid file structure, while the ``bioformats`` backend
 provides broad access to a wide array of file types but is considerably slower.
 
-In this example, the basic useage of two core classes are demonstrated by
+In this example, the basic usage of two core classes are demonstrated by
 creating a "universal" converter from any Bioformats supported file format to
 OME tiled tiff.
 
@@ -95,7 +95,7 @@ to use the Python backend:
     br = BioReader(PATH / FILENAME)
 
 The output should be something like this::
-    
+
     TypeError: img_r001_c001.ome.tif is not a tiled tiff. The python backend of
     the BioReader only supports OME tiled tiffs. Use the bioformats backend to load
     this image.
@@ -112,11 +112,11 @@ BioReader.
 
     # Set up the BioReader
     br = BioReader(PATH / FILENAME,backend='bioformats')
-    
+
     # Print off some information about the image before loading it
     print('br.shape: {}'.format(br.shape))
     print('br.dtype: {}'.format(br.dtype))
-    
+
     br.close()
 
 Behind the scenes, what happens is that JPype starts Java and loads the
@@ -133,7 +133,7 @@ Using the BioReader
 In the above code, a ``BioReader`` object is initialized, the shape and data
 type is printed, and then the BioReader object is closed. The closing of the
 ``BioReader`` object is necessary to ensure that the Java object is cleaned up
-properly. To ensure that this happens, it is recommended to put image access 
+properly. To ensure that this happens, it is recommended to put image access
 into a ``with`` block, which will automatically perform file cleanup.
 
 .. code-block:: python
@@ -156,9 +156,9 @@ without any arguments.
 
 Alternatively, the
 :attr:`~bfio.bfio.BioReader.X`,
-:attr:`~bfio.bfio.BioReader.Y`, 
-:attr:`~bfio.bfio.BioReader.Z`, 
-:attr:`~bfio.bfio.BioReader.C`, and 
+:attr:`~bfio.bfio.BioReader.Y`,
+:attr:`~bfio.bfio.BioReader.Z`,
+:attr:`~bfio.bfio.BioReader.C`, and
 :attr:`~bfio.bfio.BioReader.T` values can be specified to load only a subsection
 of the image. If the BioReader is reading from an OME tiled tiff, then the file
 reading should be faster and require less memory than other formats. This has to
@@ -258,7 +258,7 @@ to the above code block would be:
 
 .. note::
 
-    After the first ``write`` call, most BioWriter attributes become 
+    After the first ``write`` call, most BioWriter attributes become
     :attr:`~bfio.bfio.BioWriter.read_only`.
 
 --------------------------------------------
@@ -277,7 +277,7 @@ changed when a BioReader or BioWriter object is created by using the
 
 To get started, let's transform the previous examples into something more
 scalable. Something more scalable will read in a small part of one image, and
-save it into the tiled tiff format. 
+save it into the tiled tiff format.
 
 .. note::
 
@@ -288,7 +288,7 @@ save it into the tiled tiff format.
     tile size is used exclusively.
 
 .. code-block:: python
-    
+
     # Number of tiles to process at a time
     # This value squared is the total number of tiles processed at a time
     tile_grid_size = 1
@@ -299,7 +299,7 @@ save it into the tiled tiff format.
 
     with BioReader(PATH / 'file.czi',backend='bioformats') as br, \
         BioWriter(PATH / 'out.ome.tif',backend='bioformats',metadata=br.metadata) as bw:
-    
+
         # Loop through timepoints
         for t in range(br.T):
 
@@ -316,7 +316,7 @@ save it into the tiled tiff format.
                         # Loop across the depth of the image
                         for x in range(0,br.X,tile_size):
                             x_max = min([br.X,x+tile_size])
-                            
+
                             bw[y:y_max,x:x_max,z:z+1,c,t] = br[y:y_max,x:x_max,z:z+1,c,t]
 
 
@@ -335,7 +335,7 @@ only contain XYZ data. To make the above tiled tiff converter export WIPP compli
 files, the code should be changed as follows:
 
 .. code-block:: python
-    
+
     # Number of tiles to process at a time
     # This value squared is the total number of tiles processed at a time
     tile_grid_size = 1
@@ -345,13 +345,13 @@ files, the code should be changed as follows:
     tile_size = tile_grid_size * 1024
 
     with BioReader(PATH / 'file.czi',backend='bioformats') as br:
-    
+
         # Loop through timepoints
         for t in range(br.T):
 
             # Loop through channels
             for c in range(br.C):
-            
+
                 with BioWriter(PATH / 'out_c{c:03d}_t{t:03d}.ome.tif',
                                backend='bioformats',
                                metadata=br.metadata) as bw:
@@ -368,7 +368,7 @@ files, the code should be changed as follows:
                             # Loop across the depth of the image
                             for x in range(0,br.X,tile_size):
                                 x_max = min([br.X,x+tile_size])
-                                
+
                                 bw[y:y_max,x:x_max,z:z+1,0,0] = br[y:y_max,x:x_max,z:z+1,c,t]
 
 ---------------------
@@ -402,11 +402,11 @@ Self Contained Example
     # Set up the BioReader
     with BioReader(PATH / FILENAME,backend='bioformats') as br, \
         BioWriter(PATH / 'out.ome.tif',metadata=br.metadata,backend='python') as bw:
-    
+
         # Print off some information about the image before loading it
         print('br.shape: {}'.format(br.shape))
         print('br.dtype: {}'.format(br.dtype))
-        
+
         # Read in the original image, then save
         original_image = br[:]
         bw[:] = original_image
@@ -444,7 +444,7 @@ Scalable Tiled Tiff
     # Do not change this, the number of pixels to be saved at a time must
     # be a multiple of 1024
     tile_size = tile_grid_size * 1024
-    
+
     # Set up the BioReader
     with BioReader(PATH,backend='bioformats',max_workers=cpu_count()) as br:
 
@@ -453,7 +453,7 @@ Scalable Tiled Tiff
 
             # Loop through channels
             for c in range(br.C):
-            
+
                 with BioWriter(PATH.with_name(f'out_c{c:03}_t{t:03}.ome.tif'),
                             backend='python',
                             metadata=br.metadata,
@@ -469,5 +469,5 @@ Scalable Tiled Tiff
                             # Loop across the depth of the image
                             for x in range(0,br.X,tile_size):
                                 x_max = min([br.X,x+tile_size])
-                                
+
                                 bw[y:y_max,x:x_max,z:z+1,0,0] = br[y:y_max,x:x_max,z:z+1,c,t]

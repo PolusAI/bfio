@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # import core packages
 import copy
 import io
@@ -270,7 +271,7 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
                     f"position {pixels_index}."
                 )
 
-    # This is a result of dumping basically all experiement metadata
+    # This is a result of dumping basically all experiment metadata
     # into "StructuredAnnotation" blocks
     #
     # This affects new (2020) Cell Feature Explorer files

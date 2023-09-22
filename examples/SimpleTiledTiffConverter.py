@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 from bfio import BioReader, BioWriter
 from pathlib import Path
 import requests
 import numpy as np
 
-""" Get an example image """
+# Get an example image
 # Set up the directories
 PATH = Path("data")
 PATH.mkdir(parents=True, exist_ok=True)
@@ -17,7 +18,7 @@ if not (PATH / FILENAME).exists():
     content = requests.get(URL + FILENAME).content
     (PATH / FILENAME).open("wb").write(content)
 
-""" Convert the tif to tiled tiff """
+# Convert the tif to tiled tiff
 # Set up the BioReader
 with BioReader(PATH / FILENAME, backend="bioformats") as br, BioWriter(
     PATH / "out.ome.tif", metadata=br.metadata, backend="python"

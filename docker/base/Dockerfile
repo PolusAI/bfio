@@ -14,7 +14,7 @@ RUN mkdir ${EXEC_DIR} && \
     mkdir ${DATA_DIR}} && \
     mkdir /bfio_src
 
-# Instal Python
+# Install Python
 RUN apt update && \
     apt install software-properties-common -y && \
     add-apt-repository ppa:deadsnakes/ppa && \

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import abc
 import multiprocessing
 import numpy
@@ -703,7 +704,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         more tiles than what the buffer holds. To prevent the tiling function
         from doing this, there is a limit on the number of tiles that can be
         retrieved in a single call. This function determines what the largest
-        number of retreivable batches is.
+        number of retrievable batches is.
 
         Args:
             tile_size: The height and width of the tiles to retrieve
@@ -843,9 +844,9 @@ class AbstractReader(AbstractBackend):
         """Abstract read image executor.
 
         This function should ensures proper thread locking to prevent file reading
-        errors when threading. It should not be overriden by subclasses unless
+        errors when threading. It should not be overridden by subclasses unless
         absolutely necessary. Instead, `_image_io` and `_read_image` should be
-        overriden.
+        overridden.
         """
         with self._lock:
             self._image_io(*args)

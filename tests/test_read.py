@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import unittest
 import requests, io, pathlib, shutil, logging, sys
 import bfio
@@ -146,7 +147,7 @@ class TestSimpleRead(unittest.TestCase):
             I = br[:]
 
 
-""" Metadata tests to run on each backend """
+# Metadata tests to run on each backend
 
 
 def get_dims(reader):
@@ -185,7 +186,7 @@ def get_channel_names(reader):
     logger.info("image.cnames={}".format(reader.cnames))
 
 
-""" Test classes (where the testing actually happens) """
+# Test classes (where the testing actually happens)
 
 
 class TestVersion(unittest.TestCase):
