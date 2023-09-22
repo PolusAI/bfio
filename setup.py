@@ -39,7 +39,7 @@ setup(
         "zarr>=2.6.1",
         "scyjava",
         "jpype1",
-        "tifffile",
+        "tifffile>=2022.8.12",
     ],
     extras_require={
         "dev": [

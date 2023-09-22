@@ -33,35 +33,30 @@ Docker containers with all necessary components are available (see
 backends will be usable. Only files in tiled OME Tiff or OME Zarr format can be
 read/written.
 
-In order to use the `Java` backend, it is necessary to first install the JDK.
+In order to use the `Java` backend, it is necessary to first install the JDK and Maven.
 The `bfio` package is generally tested with
 [JDK 8](https://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html),
 but JDK 11 and later also appear to work.
+Here are some info on installing Maven on various OS ([Windows](https://phoenixnap.com/kb/install-maven-windows) | [Linux](https://www.digitalocean.com/community/tutorials/install-maven-linux-ubuntu) | [Mac](https://www.digitalocean.com/community/tutorials/install-maven-mac-os))
 
 ### Installing bfio
 
-The `bfio` package and the core dependencies (numpy, tifffile, imagecodecs) can
+The `bfio` package and the core dependencies (numpy, tifffile, imagecodecs, scyjava) can
 be installed using pip:
 
 `pip install bfio`
 
-Additionally, `bfio` with other dependencies can be installed:
-
-1. `pip install bfio[bioformats]` - Adds support for BioFormats/Java. See [License](#license) for additional information.
-2. `pip install bfio[zarr]` - Adds support for OME Zarr
-3. `pip install bfio[all]` - Installs all dependencies.
-
 ## Docker
 
-### labshare/polus-bfio-util:2.3.1
+### polusai/bfio:2.3.1
 
 Ubuntu based container with bfio and all dependencies (including Java).
 
-### labshare/polus-bfio-util:2.3.1-imagej
+### polusai/bfio:2.3.1-imagej
 
 Same as above, except comes with ImageJ and PyImageJ.
 
-### labshare/polus-bfio-util:2.3.1-tensorflow
+### polusai/bfio:2.3.1-tensorflow
 
 Tensorflow container with bfio installed.
 
