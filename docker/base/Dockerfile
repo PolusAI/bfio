@@ -18,7 +18,7 @@ RUN mkdir ${EXEC_DIR} && \
 RUN apt update && \
     apt install software-properties-common -y && \
     add-apt-repository ppa:deadsnakes/ppa && \
-    apt install python3.9 python3.9-distutils curl openjdk-8-jre -y && \
+    apt install python3.9 python3.9-distutils curl maven openjdk-8-jre -y && \
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
     python3.9 get-pip.py && \
     apt autoremove -y && \
