@@ -1,12 +1,14 @@
 import abc
 import multiprocessing
-import threading
-import typing
-from pathlib import Path
-from queue import Queue
-
 import numpy
 import ome_types
+import os
+import threading
+import tifffile
+import typing
+
+from pathlib import Path
+from queue import Queue
 
 
 class BioBase(object, metaclass=abc.ABCMeta):
@@ -111,13 +113,63 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path = Path(file_path)
         self._file_path = file_path
 
+        def python_backend_support():
+            # don't bother checking if file does not exist
+            if Path(self._file_path).is_file():
+                with tifffile.TiffFile(self._file_path) as tif:
+                    if not tif.pages[0].is_tiled:
+                        return False
+                    else:
+                        if (
+                            tif.pages[0].tilewidth < self._TILE_SIZE
+                            or tif.pages[0].tilewidth < self._TILE_SIZE
+                        ):
+                            return False
+            return True
+
         # validate/set the backend
+        if backend == "python":
+            extension = "".join(self._file_path.suffixes)
+            if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
+                self.logger.warning(
+                    "Python backend only works for tiled OME Tiff files,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+            else:
+                # extension is ome.tiff or ome.tif, check if it is tiled or not
+                # check if it satifies all the condition for python backend
+                if not python_backend_support():
+                    self.logger.warning(
+                        "Python backend only works for tiled OME Tiff files with "
+                        + "minimum tile size of 1024x1024, switching to bioformats"
+                        + " backend."
+                    )
+                    backend = "bioformats"
+
+        if backend == "zarr":
+            # check if it is a directory
+            if not Path.is_dir(self._file_path):
+                self.logger.warning(
+                    "Zarr backend is selected but the path is not a directory,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+
         if backend is None:
             extension = "".join(self._file_path.suffixes)
             if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
-                backend = "python"
+                # # check if it satifies all the condition for python backend
+                if python_backend_support():
+                    backend = "python"
+                else:
+                    backend = "bioformats"
             elif extension.endswith(".ome.zarr"):
-                backend = "zarr"
+                # check if this is a directory
+                if os.path.is_dir(self._file_path):
+                    backend = "zarr"
+                else:
+                    backend = "bioformats"
             else:
                 backend = "bioformats"
         elif backend.lower() not in ["python", "bioformats", "zarr"]:
@@ -312,12 +364,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
                         # If no z-match could be found, find a channel match and modify
                         elif len(cp) > 0:
-                            zp = ome_types.model.Plane(**cp[0].dict())
+                            zp = ome_types.model.Plane(**cp[0].model_dump())
                             zp.the_z = z
 
                         # If no channel match, try to find a timepoint match and modify
                         elif len(tp) > 0:
-                            zp = ome_types.model.Plane(**tp[0].dict())
+                            zp = ome_types.model.Plane(**tp[0].model_dump())
                             zp.the_c = c
                             zp.the_z = z
 
@@ -345,7 +397,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for channel, cname in (self.metadata.images[0].pixels.channels, cnames):
+        for channel, cname in zip(self.metadata.images[0].pixels.channels, cnames):
             channel.name = cname
 
     @property
@@ -391,12 +443,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}".format(dimension.upper()),
+                "physical_size_{}".format(dimension.upper()),
                 psize,
             )
             setattr(
                 self._metadata.images[0].pixels,
-                "PhysicalSize{}Unit".format(dimension.upper()),
+                "physical_size_{}_unit".format(dimension.upper()),
                 units,
             )
 
@@ -560,9 +612,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert dtype in self._DTYPE.values(), "Invalid data type."
         for k, v in self._DTYPE.items():
             if dtype == v:
-                self._metadata.images[
-                    0
-                ].pixels.type = ome_types.model.simple_types.PixelType(k)
+                self._metadata.images[0].pixels.type = ome_types.model.PixelType(k)
 
     @property
     def samples_per_pixel(self) -> int:

@@ -15,8 +15,6 @@ import numpy
 import ome_types
 import re
 from tifffile import tifffile
-from xmlschema.validators.exceptions import XMLSchemaValidationError
-from lxml.etree import XMLSchemaValidateError
 from xml.etree import ElementTree as ET
 
 # bfio internals
@@ -427,14 +425,12 @@ class PythonReader(bfio.base_classes.AbstractReader):
         if self._metadata is None:
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata, parser="lxml", validate=False
+                    self._rdr.ome_metadata, validate=False
                 )
-            except (XMLSchemaValidationError, XMLSchemaValidateError):
+            except ET.ParseError:
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
-                    self._metadata = ome_types.from_xml(
-                        cleaned, parser="lxml", validate=False
-                    )
+                    self._metadata = ome_types.from_xml(cleaned, validate=False)
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
                     )
@@ -443,79 +439,35 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         return self._metadata
 
-    class _TiffBytesOffsets(tifffile.TiffFrame):
+    class _TiffBytesOffsets:
         def __init__(self, parent, index):
-            self.index = index
+            self._tiff_frame = tifffile.TiffFrame(parent, index)
 
-            self.parent = parent
+        def get_offset(self):
+            return self._tiff_frame._nextifd()
 
-            self.dataoffsets = ()
-            self.databytecounts = ()
+        def get_index(self):
+            return self._tiff_frame.index
 
-            fh = self.parent.filehandle
-            self.offset = fh.tell()
-            for code, tag in self._gettags({324, 325}):
-                if code == 324:
-                    self.dataoffsets = tag.value
-                elif code == 325:
-                    self.databytecounts = tag.value
+        def get_dataoffsets(self):
+            return self._tiff_frame.dataoffsets
 
-            # get the next offset
-            tiff = self.parent.tiff
-            fh.seek(self.offset)
-            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-            fh.seek(self.offset + tiff.tagnosize + tagno * tiff.tagsize)
-            self.next_offset = struct.unpack(
-                tiff.offsetformat, fh.read(tiff.offsetsize)
-            )[0]
-
-        def _gettags(self, codes={324, 325}):
-            """Return list of (code, TiffTag) from file."""
-            fh = self.parent.filehandle
-            tiff = self.parent.tiff
-            unpack = struct.unpack
-            tags = []
-
-            tagno = unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
-
-            tagoffset = self.offset + tiff.tagnosize  # fh.tell()
-            tagsize = tiff.tagsize
-            codeformat = tiff.tagformat1[:2]
-            tagbytes = fh.read(tagsize * tagno)
-
-            have_one_tag = False
-            for tagindex in reversed(range(0, tagno * tagsize, tagsize)):
-                code = unpack(codeformat, tagbytes[tagindex : tagindex + 2])[0]
-                if code not in codes:
-                    continue
-                tag = tifffile.TiffTag.fromfile(
-                    self.parent,
-                    tagoffset + tagindex,
-                    tagbytes[tagindex : tagindex + tagsize],
-                )
-                tags.append((code, tag))
-                if have_one_tag:
-                    break
-                else:
-                    have_one_tag = True
-
-            return tags
+        def get_databytecounts(self):
+            return self._tiff_frame.databytecounts
 
     def _page_offsets_bytes(self, index: int):
         if index == 0:
             return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
-
         parent = self._rdr
 
-        if self._offsets_bytes is None or self._offsets_bytes.index + 1 != index:
+        if self._offsets_bytes is None or self._offsets_bytes.get_index() + 1 != index:
             self._rdr.pages._seek(int(index))
         else:
-            self._rdr.filehandle.seek(self._offsets_bytes.next_offset)
+            self._rdr.filehandle.seek(self._offsets_bytes.get_offset())
 
         obc = self._TiffBytesOffsets(parent, index)
         self._offsets_bytes = obc
-
-        return obc.dataoffsets, obc.databytecounts
+        return obc.get_dataoffsets(), obc.get_databytecounts()
 
     def _chunk_indices(self, X, Y, Z, C=[0], T=[0]):
         self.logger.debug(f"_chunk_indices(): (X,Y,Z,C,T) -> ({X},{Y},{Z},{C},{T})")
@@ -1108,7 +1060,8 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
     def _write_tiles(self, data, X, Y, Z, C, T):
         assert len(X) == 2 and len(Y) == 2
-
+        if self.frontend._TILE_SIZE != 2**10:
+            logger.warning("TILE_SIZE is not set to 1024, tile may save incorrectly.")
         if X[0] % self.frontend._TILE_SIZE != 0 or Y[0] % self.frontend._TILE_SIZE != 0:
             logger.warning(
                 "X or Y positions are not on tile boundary, tile may save incorrectly"
@@ -1201,7 +1154,6 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
 
 try:
-    from bioformats_jar import get_loci
     import jpype
     import jpype.imports
     from jpype.types import JString
@@ -1213,19 +1165,20 @@ try:
         _classes_loaded = False
 
         def _load_java_classes(self):
-            loci = get_loci()
+            if not jpype.isJVMStarted():
+                bfio.start()
 
             global ImageReader
-            ImageReader = loci.formats.ImageReader
+            from loci.formats import ImageReader
 
             global ServiceFactory
-            ServiceFactory = loci.common.services.ServiceFactory
+            from loci.common.services import ServiceFactory
 
             global OMEXMLService
-            OMEXMLService = loci.formats.services.OMEXMLService
+            from loci.formats.services import OMEXMLService
 
             global IMetadata
-            IMetadata = loci.formats.meta.IMetadata
+            from loci.formats.meta import IMetadata
 
             JavaReader._classes_loaded = True
 
@@ -1257,7 +1210,20 @@ try:
 
         def _read_image(self, X, Y, Z, C, T, output):
             out = self._image
+            pseudo_interleaved = any(
+                channel.samples_per_pixel > 1
+                for channel in self.frontend.metadata.images[0].pixels.channels
+            )
 
+            interleaved = False
+            if (
+                self.frontend.metadata.images[0].pixels.interleaved
+                or pseudo_interleaved
+            ):
+                interleaved = True
+
+            self._prev_read_cached_loc = None
+            self._cached_read_data = None
             for ti, t in enumerate(T):
                 for zi, z in enumerate(range(Z[0], Z[1])):
                     for ci, c in enumerate(C):
@@ -1270,24 +1236,33 @@ try:
                             y_max = min([Y[1], self.frontend.Y])
                             for y in range(Y[0], y_max, self._chunk_size):
                                 y_range = min([self._chunk_size, y_max - y])
+                                current_read_loc = (index, x, y, x_range, y_range)
+                                if current_read_loc != self._prev_read_cached_loc:
+                                    tmp_read = self._rdr.openBytes(
+                                        index, x, y, x_range, y_range
+                                    )
+                                    self._cached_read_data = numpy.frombuffer(
+                                        bytes(tmp_read),
+                                        self.frontend.dtype,
+                                    )
+                                    self._prev_read_cached_loc = current_read_loc
 
-                                image = self._rdr.openBytes(
-                                    index, x, y, x_range, y_range
-                                )
-                                image = numpy.frombuffer(
-                                    bytes(image),
-                                    self.frontend.dtype,
-                                )
-
+                                image = self._cached_read_data
                                 # TODO: This should be changed in the future
                                 # This reloads all channels for a tile on each
                                 # loop. Ideally, there would be some better
                                 # logic here to only load the necessary channel
                                 # information once.
+
+                                # For now, we are adding some basic caching
                                 if self._rdr.getFormat() not in ["Zeiss CZI"]:
-                                    image = image.reshape(
-                                        self.frontend.spp, y_range, x_range
-                                    )[c % self.frontend.spp, ...]
+                                    if interleaved:
+                                        image = image[c :: self.frontend.spp]
+                                        image = image.reshape(y_range, x_range)
+                                    else:
+                                        image = image.reshape(
+                                            self.frontend.spp, y_range, x_range
+                                        )[c % self.frontend.spp, ...]
                                 else:
                                     image = image.reshape(
                                         y_range, x_range, self.frontend.spp
@@ -1362,7 +1337,7 @@ try:
                     channel.samples_per_pixel = 1
 
                     for c in range(expand_channels):
-                        new_channel = ome_types.model.Channel(**channel.dict())
+                        new_channel = ome_types.model.Channel(**channel.model_dump())
                         new_channel.id = channel.id + f":{c}"
                         image.pixels.channels.append(new_channel)
 
@@ -1488,15 +1463,11 @@ try:
                         metadata = fr.read()
 
                     try:
-                        self._metadata = ome_types.from_xml(
-                            metadata, parser="lxml", validate=False
-                        )
-                    except (XMLSchemaValidationError, XMLSchemaValidateError):
+                        self._metadata = ome_types.from_xml(metadata, validate=False)
+                    except ET.ParseError:
                         if self.frontend.clean_metadata:
                             cleaned = clean_ome_xml_for_known_issues(metadata)
-                            self._metadata = ome_types.from_xml(
-                                cleaned, parser="lxml", validate=False
-                            )
+                            self._metadata = ome_types.from_xml(cleaned, validate=False)
                             self.logger.warning(
                                 "read_metadata(): OME XML required reformatting."
                             )
@@ -1506,24 +1477,31 @@ try:
                 return self._metadata
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
-                omexml = ome_types.model.OME.construct()
-                omexml.images[0].Name = Path(self.frontend._file_path).name
-                p = omexml.images[0].Pixels
+                omexml = ome_types.model.OME.model_construct()
+                ome_dtype = self._rdr[0].dtype.name
+                # this is speculation, since each array in a gruop, in theory,
+                # can have distinct properties
+                ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+                ome_pixel = ome_types.model.Pixels(
+                    dimension_order=ome_dim_order,
+                    big_endian=False,
+                    size_x=self._rdr[0].shape[4],
+                    size_y=self._rdr[0].shape[3],
+                    size_z=self._rdr[0].shape[2],
+                    size_c=self._rdr[0].shape[1],
+                    size_t=self._rdr[0].shape[0],
+                    channels=[],
+                    type=ome_dtype,
+                )
 
-                for i, d in enumerate("XYZCT"):
-                    setattr(p, "Size{}".format(d), self._rdr.shape[4 - i])
+                for i in range(ome_pixel.size_c):
+                    ome_pixel.channels.append(ome_types.model.Channel())
 
-                p.channel_count = p.SizeC
-                for i in range(0, p.SizeC):
-                    p.Channel(i).Name = ""
-
-                p.DimensionOrder = ome_types.model.pixels.DimensionOrder.XYZCT
-
-                dtype = numpy.dtype(self._rdr.dtype.name).type
-                for k, v in self.frontend._DTYPE.items():
-                    if dtype == v:
-                        p.PixelType = k
-                        break
+                omexml.images.append(
+                    ome_types.model.Image(
+                        name=Path(self.frontend._file_path).name, pixels=ome_pixel
+                    )
+                )
 
                 return omexml
 
