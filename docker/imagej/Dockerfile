@@ -17,7 +17,7 @@ RUN apt update && \
 RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
 # Install
-RUN pip3 install /bfio_src[all] --no-cache-dir && \
+RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
 
 # Install packages
