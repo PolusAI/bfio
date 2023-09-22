@@ -24,31 +24,31 @@ jobs:
       - run: echo ${{ steps.get_version.outputs.version }}
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME_SAMEE }}
-          password: ${{ secrets.DOCKER_TOKEN_SAMEE }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Publish Base Container 🐳
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/base/Dockerfile
           push: true
-          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}
+          tags: polusai/bfio:${{ steps.get_version.outputs.version }}
 
       - name: Publish Tensorflow Container 🐳
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/tensorflow/Dockerfile
           push: true
-          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}-tensorflow
+          tags: polusai/bfio:${{ steps.get_version.outputs.version }}-tensorflow
 
       - name: Publish ImageJ Container 🐳
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/imagej/Dockerfile
           push: true
-          tags: sameeul/bfiotest:${{ steps.get_version.outputs.version }}-imagej
+          tags: polusai/bfio:${{ steps.get_version.outputs.version }}-imagej
