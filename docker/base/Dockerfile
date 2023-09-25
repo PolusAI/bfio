@@ -32,3 +32,5 @@ COPY . /bfio_src
 # Install
 RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
+
+RUN python3 -c 'import bfio; bfio.start()'
