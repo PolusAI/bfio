@@ -4,7 +4,6 @@ import multiprocessing
 import numpy
 import ome_types
 import threading
-import tifffile
 import typing
 
 from pathlib import Path
@@ -91,7 +90,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
         self,
         file_path: typing.Union[str, Path],
         max_workers: typing.Optional[int] = None,
-        backend: typing.Optional[str] = None,
         read_only: typing.Optional[bool] = True,
     ):
         """Initialize BioBase object.
@@ -100,8 +98,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path (typing.Union[str, Path]): Path to output file
             max_workers (typing.Optional[int], optional): Number of threads to be used.
                 Defaults to None.
-            backend (typing.Optional[str], optional): Must be `python`, `bioformats`,
-                or `zarr`.If None, attempts to detect type. Defaults to None.
             read_only (typing.Optional[bool], optional): [description].
                 Defaults to True.
         """
@@ -113,91 +109,11 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path = Path(file_path)
         self._file_path = file_path
 
-        def python_backend_support():
-            # don't bother checking if file does not exist
-            if Path(self._file_path).is_file():
-                with tifffile.TiffFile(self._file_path) as tif:
-                    if not tif.pages[0].is_tiled:
-                        return False
-                    else:
-                        if (
-                            tif.pages[0].tilewidth < self._TILE_SIZE
-                            or tif.pages[0].tilewidth < self._TILE_SIZE
-                        ):
-                            return False
-            return True
-
-        # validate/set the backend
-        if backend == "python":
-            extension = "".join(self._file_path.suffixes)
-            if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
-                self.logger.warning(
-                    "Python backend only works for tiled OME Tiff files,"
-                    + " switching to bioformats backend."
-                )
-                backend = "bioformats"
-            else:
-                # extension is ome.tiff or ome.tif, check if it is tiled or not
-                # check if it satisfies all the condition for python backend
-                if not python_backend_support():
-                    self.logger.warning(
-                        "Python backend only works for tiled OME Tiff files with "
-                        + "minimum tile size of 1024x1024, switching to bioformats"
-                        + " backend."
-                    )
-                    backend = "bioformats"
-
-        if backend == "zarr":
-            # if path exists, make sure it is a directory
-            if Path.exists(self._file_path):
-                if not Path.is_dir(self._file_path):
-                    self.logger.warning(
-                        "Zarr backend is selected but the path is not a directory,"
-                        + " switching to bioformats backend."
-                    )
-                    backend = "bioformats"
-
-        if backend is None:
-            extension = "".join(self._file_path.suffixes)
-            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
-                # # check if it satisfies all the condition for python backend
-                if python_backend_support():
-                    backend = "python"
-                else:
-                    backend = "bioformats"
-            elif extension.endswith(".ome.zarr"):
-                # if path exists, make sure it is a directory
-                if Path.exists(self._file_path):
-                    if not Path.is_dir(self._file_path):
-                        self.logger.warning(
-                            "Zarr backend is selected but the path is not a directory,"
-                            + " switching to bioformats backend."
-                        )
-                        backend = "bioformats"
-                else:
-                    backend = "zarr"
-            else:
-                backend = "bioformats"
-        elif backend.lower() not in ["python", "bioformats", "zarr"]:
-            raise ValueError(
-                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
-            )
-        self._backend_name = backend.lower()
-
-        # Set the number of workers for multi-threaded loading
-        if self._backend_name == "bioformats":
-            if max_workers is not None:
-                self.logger.warning(
-                    "The max_workers keyword was present, but bioformats backend only "
-                    + "operates with a single worker. Setting max_workers=1."
-                )
-            self.max_workers = 1
-        else:
-            self.max_workers = (
-                max_workers
-                if max_workers is not None
-                else max([multiprocessing.cpu_count() // 2, 1])
-            )
+        self.max_workers = (
+            max_workers
+            if max_workers is not None
+            else max([multiprocessing.cpu_count() // 2, 1])
+        )
 
         # Create an thread lock for the object
         self._lock = threading.Lock()
