@@ -3,7 +3,6 @@ import abc
 import multiprocessing
 import numpy
 import ome_types
-import os
 import threading
 import tifffile
 import typing
@@ -139,7 +138,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
                 backend = "bioformats"
             else:
                 # extension is ome.tiff or ome.tif, check if it is tiled or not
-                # check if it satifies all the condition for python backend
+                # check if it satisfies all the condition for python backend
                 if not python_backend_support():
                     self.logger.warning(
                         "Python backend only works for tiled OME Tiff files with "
@@ -149,28 +148,34 @@ class BioBase(object, metaclass=abc.ABCMeta):
                     backend = "bioformats"
 
         if backend == "zarr":
-            # check if it is a directory
-            if not Path.is_dir(self._file_path):
-                self.logger.warning(
-                    "Zarr backend is selected but the path is not a directory,"
-                    + " switching to bioformats backend."
-                )
-                backend = "bioformats"
+            # if path exists, make sure it is a directory
+            if Path.exists(self._file_path):
+                if not Path.is_dir(self._file_path):
+                    self.logger.warning(
+                        "Zarr backend is selected but the path is not a directory,"
+                        + " switching to bioformats backend."
+                    )
+                    backend = "bioformats"
 
         if backend is None:
             extension = "".join(self._file_path.suffixes)
             if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
-                # # check if it satifies all the condition for python backend
+                # # check if it satisfies all the condition for python backend
                 if python_backend_support():
                     backend = "python"
                 else:
                     backend = "bioformats"
             elif extension.endswith(".ome.zarr"):
-                # check if this is a directory
-                if os.path.is_dir(self._file_path):
-                    backend = "zarr"
+                # if path exists, make sure it is a directory
+                if Path.exists(self._file_path):
+                    if not Path.is_dir(self._file_path):
+                        self.logger.warning(
+                            "Zarr backend is selected but the path is not a directory,"
+                            + " switching to bioformats backend."
+                        )
+                        backend = "bioformats"
                 else:
-                    backend = "bioformats"
+                    backend = "zarr"
             else:
                 backend = "bioformats"
         elif backend.lower() not in ["python", "bioformats", "zarr"]:

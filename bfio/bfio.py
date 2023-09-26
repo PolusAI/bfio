@@ -905,7 +905,7 @@ class BioWriter(BioBase):
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = metadata.copy(deep=True)
+            self._metadata = metadata.model_copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
