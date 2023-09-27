@@ -1480,7 +1480,7 @@ try:
                 # Couldn't find OMEXML metadata, scrape metadata from file
                 omexml = ome_types.model.OME.model_construct()
                 ome_dtype = self._rdr[0].dtype.name
-                # this is speculation, since each array in a gruop, in theory,
+                # this is speculation, since each array in a group, in theory,
                 # can have distinct properties
                 ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
                 ome_pixel = ome_types.model.Pixels(

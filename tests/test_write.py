@@ -97,6 +97,7 @@ class TestOmeTiffWrite(unittest.TestCase):
 
             bw.shape = image.shape
             bw.dtype = image.dtype
+
     @unittest.skipIf(sys.platform.startswith("darwin"), "Does not work in Mac")
     def test_write_java(self):
         # Cannot write an image with channel information using python backend

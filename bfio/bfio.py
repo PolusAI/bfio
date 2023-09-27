@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy
 import ome_types
+import tifffile
 
 from bfio import backends
 from bfio.base_classes import BioBase
@@ -105,12 +106,10 @@ class BioReader(BioBase):
                 *Default is True.*
         """
         # Initialize BioBase
-        super(BioReader, self).__init__(
-            file_path, max_workers=max_workers, backend=backend
-        )
+        super(BioReader, self).__init__(file_path, max_workers=max_workers)
 
         self.clean_metadata = clean_metadata
-
+        self.set_backend(backend)
         # Ensure backend is supported
         self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
@@ -118,6 +117,12 @@ class BioReader(BioBase):
         elif self._backend_name == "bioformats":
             try:
                 self._backend = backends.JavaReader(self)
+                if max_workers is not None:
+                    self.logger.warning(
+                        "The max_workers keyword was present, but bioformats backend "
+                        + "only operates with a single worker. Setting max_workers=1."
+                    )
+                self.max_workers = 1
             except Exception as err:
                 if repr(err).split("(")[0] in [
                     "UnknownFormatException",
@@ -135,8 +140,7 @@ class BioReader(BioBase):
                     raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrReader(self)
-
-            if max_workers == 2:
+            if self.max_workers == 2:
                 self.max_workers = 1
                 self.logger.debug(
                     "Setting max_workers to 1, since max_workers==2 runs slower."
@@ -151,6 +155,80 @@ class BioReader(BioBase):
 
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
+
+    def set_backend(self, backend: typing.Optional[str] = None) -> None:
+        # nested helper function
+        def python_backend_support():
+            with tifffile.TiffFile(self._file_path) as tif:
+                if not tif.pages[0].is_tiled:
+                    return False
+                else:
+                    if (
+                        tif.pages[0].tilewidth < self._TILE_SIZE
+                        or tif.pages[0].tilewidth < self._TILE_SIZE
+                    ):
+                        return False
+            return True
+
+        # validate/set the backend
+        if backend is not None and backend.lower() not in [
+            "python",
+            "bioformats",
+            "zarr",
+        ]:
+            raise ValueError(
+                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
+            )
+        if backend == "python":
+            extension = "".join(self._file_path.suffixes)
+            if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
+                self.logger.warning(
+                    "Python backend only works for tiled OME Tiff files,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+            else:
+                # extension is ome.tiff or ome.tif, check if it is tiled or not
+                # check if it satisfies all the condition for python backend
+                if not python_backend_support():
+                    self.logger.warning(
+                        "Python backend only works for tiled OME Tiff files with "
+                        + "minimum tile size of 1024x1024, switching to bioformats"
+                        + " backend."
+                    )
+                    backend = "bioformats"
+
+        if backend == "zarr":
+            # make sure it is a directory
+            if not Path.is_dir(self._file_path):
+                self.logger.warning(
+                    "Zarr backend is selected but the path is not a directory,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+
+        if backend is None:
+            extension = "".join(self._file_path.suffixes)
+            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
+                # # check if it satisfies all the condition for python backend
+                if python_backend_support():
+                    backend = "python"
+                else:
+                    backend = "bioformats"
+            elif extension.endswith(".ome.zarr"):
+                # if path exists, make sure it is a directory
+                if not Path.is_dir(self._file_path):
+                    self.logger.warning(
+                        "Zarr backend is selected but the path is not a directory,"
+                        + " switching to bioformats backend."
+                    )
+                    backend = "bioformats"
+                else:
+                    backend = "zarr"
+            else:
+                backend = "bioformats"
+
+        self._backend_name = backend.lower()
 
     def __getstate__(self) -> typing.Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
@@ -899,13 +977,12 @@ class BioWriter(BioBase):
         super(BioWriter, self).__init__(
             file_path=file_path,
             max_workers=max_workers,
-            backend=backend,
             read_only=False,
         )
 
         if metadata:
             assert metadata.__class__.__name__ == "OME"
-            self._metadata = metadata.copy(deep=True)
+            self._metadata = metadata.model_copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
             self._metadata.images[
@@ -927,13 +1004,42 @@ class BioWriter(BioBase):
                 for k, v in kwargs.items():
                     setattr(self, k, v)
 
+        self.set_backend(backend)
         # Ensure backend is supported
         if self._backend_name == "python":
             self._backend = backends.PythonWriter(self)
         elif self._backend_name == "bioformats":
-            self._backend = backends.JavaWriter(self)
+            try:
+                self._backend = backends.JavaWriter(self)
+                if max_workers is not None:
+                    self.logger.warning(
+                        "The max_workers keyword was present, but bioformats backend "
+                        + "only operates with a single worker. Setting max_workers=1."
+                    )
+                self.max_workers = 1
+            except Exception as err:
+                if repr(err).split("(")[0] in [
+                    "UnknownFormatException",
+                    "MissingLibraryException",
+                ]:
+                    self.logger.error(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                    raise TypeError(
+                        "UnknownFormatException: Did not recognize file format: "
+                        + f"{file_path}"
+                    )
+                else:
+                    raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrWriter(self)
+            if self.max_workers == 2:
+                self.max_workers = 1
+                self.logger.debug(
+                    "Setting max_workers to 1, since max_workers==2 runs slower."
+                    + "To change back, set the object property."
+                )
         else:
             raise ValueError('backend must be "python", "bioformats", or "zarr"')
 
@@ -954,6 +1060,53 @@ class BioWriter(BioBase):
 
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
+
+    def set_backend(self, backend: typing.Optional[str] = None) -> None:
+        # validate/set the backend
+        if backend is not None and backend.lower() not in [
+            "python",
+            "bioformats",
+            "zarr",
+        ]:
+            raise ValueError(
+                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
+            )
+        if backend == "python":
+            extension = "".join(self._file_path.suffixes)
+            if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
+                self.logger.warning(
+                    "Python backend only works for tiled OME Tiff files,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+
+        if backend == "zarr":
+            # make sure we can create a directory
+            if Path.exists(self._file_path) and Path.is_file(self._file_path):
+                self.logger.warning(
+                    "Zarr backend is selected but a file with same pathname exist,"
+                    + " switching to bioformats backend."
+                )
+                backend = "bioformats"
+
+        if backend is None:
+            extension = "".join(self._file_path.suffixes)
+            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
+                backend = "python"
+            elif extension.endswith(".ome.zarr"):
+                # make sure we can create a directory
+                if Path.exists(self._file_path) and Path.is_file(self._file_path):
+                    self.logger.warning(
+                        "Zarr backend is selected but the path is not a directory,"
+                        + " switching to bioformats backend."
+                    )
+                    backend = "bioformats"
+                else:
+                    backend = "zarr"
+            else:
+                backend = "bioformats"
+
+        self._backend_name = backend.lower()
 
     def __setitem__(
         self, keys: typing.Union[tuple, slice], value: numpy.ndarray
