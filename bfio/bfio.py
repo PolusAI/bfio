@@ -190,8 +190,6 @@ class BioReader(BioBase):
             return "bioformats"
 
     def set_backend(self, backend: typing.Optional[str] = None) -> None:
-        # nested helper function
-
         # validate/set the backend
         if backend is not None and backend.lower() not in [
             "python",

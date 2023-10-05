@@ -4,10 +4,9 @@ import requests, io, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 import zarr
-from ome_zarr.utils import download
+from ome_zarr.utils import download as zarr_download
 
 TEST_IMAGES = {
-    # "13457537.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0101A/13457537.zarr",
     "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
@@ -43,7 +42,7 @@ def setUpModule():
             with open(TEST_DIR.joinpath(file), "wb") as fw:
                 fw.write(r.content)
         else:
-            download(url, str(TEST_DIR))
+            zarr_download(url, str(TEST_DIR))
 
     """Load the czi image, and save as a npy file for further testing."""
     with bfio.BioReader(
@@ -220,7 +219,7 @@ class TestZarrReader(unittest.TestCase):
         """Testing metadata dimension attributes"""
         with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr"), backend="zarr") as br:
             get_dims(br)
-            assert br.shape == (512, 672, 21, 3)
+            self.assertEqual(br.shape, (512, 672, 21, 3))
 
     def test_get_pixel_size(self):
         """Testing metadata pixel sizes"""
