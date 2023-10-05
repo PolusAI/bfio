@@ -1448,8 +1448,15 @@ try:
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
+            try:
+                self._root = zarr.open(
+                    str(self.frontend._file_path.resolve()), mode="r"
+                )
+            except zarr.errors.PathNotFoundError:
+                # a workaround for pre-compute slide output directory structure
+                data_zarr_path = str(self.frontend._file_path.resolve()) + "/data.zarr"
+                self._root = zarr.open(data_zarr_path, mode="r")
 
-            self._root = zarr.open(str(self.frontend._file_path.resolve()), mode="r")
             if isinstance(self._root, zarr.core.Array):
                 self._rdr = self._root
             elif isinstance(self._root, zarr.hierarchy.Group):
@@ -1461,6 +1468,31 @@ try:
                     # need to go one more level
                     self._root = self._root[next(self._root.group_keys())]
                     self._rdr = self._root[next(self._root.array_keys())]
+            else:
+                pass
+
+            self._axes_list = []
+
+        def _get_axis_info(self):
+            shape_len = len(self._rdr.shape)
+            if shape_len == 5:
+                self._axes_list = ["t", "c", "z", "y", "x"]
+            else:
+                try:
+                    axes_metadata = self._root.attrs["multiscales"][0]["axes"]
+                    for axes in axes_metadata:
+                        self._axes_list.append(axes["name"])
+                except AttributeError or KeyError:
+                    self.logger.warning(
+                        "Unable to find multiscales metadata. Z, C and T "
+                        + "dimensions might be incorrect."
+                    )
+                    if shape_len == 4:
+                        self._axes_list = ["c", "z", "y", "x"]
+                    elif shape_len == 3:
+                        self._axes_list = ["z", "y", "x"]
+                    elif shape_len == 2:
+                        self._axes_list = ["y", "x"]
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
@@ -1505,6 +1537,7 @@ try:
                 size_t = 1
 
                 assert len(self._rdr.shape) >= 2
+                self._get_axis_info()
 
                 if len(self._rdr.shape) == 5:
                     # 5D data, we know what to do
@@ -1515,27 +1548,15 @@ try:
                     size_t = self._rdr.shape[0]
                 else:
                     # last two dims are X and Y
-                    shape_len = len(self._rdr.shape)
-                    size_x = self._rdr.shape[shape_len - 1]
-                    size_y = self._rdr.shape[shape_len - 2]
-                    # see if multiscale_metadata exists to get z, c and t
-                    try:
-                        axes_list = self._root.attrs["multiscales"][0]["axes"]
-                        axes_symble = []
-                        for axes in axes_list:
-                            axes_symble.append(axes["name"])
-
-                        if "z" in axes_symble:
-                            size_z = self._rdr.shape[axes_symble.index("z")]
-                        if "c" in axes_symble:
-                            size_c = self._rdr.shape[axes_symble.index("c")]
-                        if "t" in axes_symble:
-                            size_t = self._rdr.shape[axes_symble.index("t")]
-                    except AttributeError or KeyError:
-                        self.logger.warning(
-                            "Unable to find multiscales metadata. Z, C and T "
-                            + "dimensions might be incorrect."
-                        )
+                    size_x = self._rdr.shape[-1]
+                    size_y = self._rdr.shape[-2]
+                    # update z, c and t if any info available
+                    if "z" in self._axes_list:
+                        size_z = self._rdr.shape[self._axes_list.index("z")]
+                    if "c" in self._axes_list:
+                        size_c = self._rdr.shape[self._axes_list.index("c")]
+                    if "t" in self._axes_list:
+                        size_t = self._rdr.shape[self._axes_list.index("t")]
 
                 ome_pixel = ome_types.model.Pixels(
                     dimension_order=ome_dim_order,
@@ -1565,9 +1586,21 @@ try:
 
             ts = self.frontend._TILE_SIZE
 
-            data = self._rdr[
-                T[1], C[1], Z[1] : Z[1] + 1, Y[1] : Y[1] + ts, X[1] : X[1] + ts
-            ]
+            if self._axes_list == []:
+                self._get_axis_info()
+            requested_slices = []
+
+            if "t" in self._axes_list:
+                requested_slices.append(slice(T[1],T[1]+1))
+            if "c" in self._axes_list:
+                requested_slices.append(slice(C[1],C[1]+1))
+            if "z" in self._axes_list:
+                requested_slices.append(slice(Z[1],Z[1]+1))
+
+            requested_slices.append(slice(Y[1],Y[1]+ts))
+            requested_slices.append(slice(X[1],X[1]+ts))
+
+            data = self._rdr[tuple(requested_slices)]
 
             self._image[
                 Y[0] : Y[0] + data.shape[-2],
