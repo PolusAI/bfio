@@ -4,9 +4,11 @@ import requests, io, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 import zarr
+from ome_zarr.utils import download
 
 TEST_IMAGES = {
-    # "1884807.ome.zarr": "https://s3.embassy.ebi.ac.uk/idr/zarr/v0.1/1884807.zarr/",
+    # "13457537.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0101A/13457537.zarr",
+    "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
     "img_r001_c001.ome.tif": "https://github.com/usnistgov/WIPP/raw/master/data/PyramidBuilding/inputCollection/img_r001_c001.ome.tif",
@@ -32,7 +34,7 @@ def setUpModule():
     for file, url in TEST_IMAGES.items():
         logger.info(f"setup - Downloading: {file}")
 
-        if not file.endswith(".ome.zarr"):
+        if not file.endswith(".zarr"):
             if TEST_DIR.joinpath(file).exists():
                 continue
 
@@ -41,25 +43,7 @@ def setUpModule():
             with open(TEST_DIR.joinpath(file), "wb") as fw:
                 fw.write(r.content)
         else:
-            base_path = TEST_DIR.joinpath(file)
-            base_path.mkdir()
-            base_path.joinpath("0").mkdir()
-
-            units = [
-                ".zattrs",
-                ".zgroup",
-                "0/.zarray",
-                "0/0.0.0.0.0",
-                "0/0.1.0.0.0",
-                "0/0.2.0.0.0",
-            ]
-
-            for u in units:
-                if base_path.joinpath(u).exists():
-                    continue
-
-                with open(base_path.joinpath(u), "wb") as fw:
-                    fw.write(requests.get(url + u).content)
+            download(url, str(TEST_DIR))
 
 
 # def tearDownModule():
