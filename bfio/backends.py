@@ -1592,7 +1592,6 @@ try:
             # actual zarr array can be of 2-5D, but bfio interface
             # is 5D
             requested_slices = []
-
             if "t" in self._axes_list:
                 requested_slices.append(slice(T[1], T[1] + 1))
             if "c" in self._axes_list:
@@ -1602,16 +1601,14 @@ try:
 
             requested_slices.append(slice(Y[1], Y[1] + ts))
             requested_slices.append(slice(X[1], X[1] + ts))
-
-            data = self._rdr[tuple(requested_slices)]
-
+            data = self._rdr[tuple(requested_slices)].squeeze()
             self._image[
                 Y[0] : Y[0] + data.shape[-2],
                 X[0] : X[0] + data.shape[-1],
-                Z[0] : Z[0] + 1,
+                Z[0] ,
                 C[0],
                 T[0],
-            ] = data.transpose(1, 2, 0)
+            ] = data
 
         def _read_image(self, X, Y, Z, C, T, output):
             if self.frontend.max_workers > 1:
