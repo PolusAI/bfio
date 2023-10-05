@@ -9,3 +9,4 @@ examples/data
 .pytest_cache
 bfio/VERSION
 tests/data
+tmp/*

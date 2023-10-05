@@ -1450,8 +1450,17 @@ try:
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
 
             self._root = zarr.open(str(self.frontend._file_path.resolve()), mode="r")
-
-            self._rdr = self._root["0"]
+            if isinstance(self._root, zarr.core.Array):
+                self._rdr = self._root
+            elif isinstance(self._root, zarr.hierarchy.Group):
+                # the top level is a group, check if this has any arrays
+                num_arrays = len(sorted(self._root.array_keys()))
+                if num_arrays > 0:
+                    self._rdr = self._root[next(self._root.array_keys())]
+                else:
+                    # need to go one more level
+                    self._root = self._root[next(self._root.group_keys())]
+                    self._rdr = self._root[next(self._root.array_keys())]
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
@@ -1479,18 +1488,63 @@ try:
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
                 omexml = ome_types.model.OME.model_construct()
-                ome_dtype = self._rdr[0].dtype.name
+                ome_dtype = self._rdr.dtype.name
+                if ome_dtype == "float64":
+                    ome_dtype = "double"  # to match ome_types pydantic model
+                elif ome_dtype == "float32":
+                    ome_dtype = "float"  # to match ome_types pydantic model
+                else:
+                    pass
                 # this is speculation, since each array in a group, in theory,
                 # can have distinct properties
                 ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+                size_x = 1
+                size_y = 1
+                size_z = 1
+                size_c = 1
+                size_t = 1
+
+                assert len(self._rdr.shape) >= 2
+
+                if len(self._rdr.shape) == 5:
+                    # 5D data, we know what to do
+                    size_x = self._rdr.shape[4]
+                    size_y = self._rdr.shape[3]
+                    size_z = self._rdr.shape[2]
+                    size_c = self._rdr.shape[1]
+                    size_t = self._rdr.shape[0]
+                else:
+                    # last two dims are X and Y
+                    shape_len = len(self._rdr.shape)
+                    size_x = self._rdr.shape[shape_len - 1]
+                    size_y = self._rdr.shape[shape_len - 2]
+                    # see if multiscale_metadata exists to get z, c and t
+                    try:
+                        axes_list = self._root.attrs["multiscales"][0]["axes"]
+                        axes_symble = []
+                        for axes in axes_list:
+                            axes_symble.append(axes["name"])
+
+                        if "z" in axes_symble:
+                            size_z = self._rdr.shape[axes_symble.index("z")]
+                        if "c" in axes_symble:
+                            size_c = self._rdr.shape[axes_symble.index("c")]
+                        if "t" in axes_symble:
+                            size_t = self._rdr.shape[axes_symble.index("t")]
+                    except AttributeError or KeyError:
+                        self.logger.warning(
+                            "Unable to find multiscales metadata. Z, C and T "
+                            + "dimensions might be incorrect."
+                        )
+
                 ome_pixel = ome_types.model.Pixels(
                     dimension_order=ome_dim_order,
                     big_endian=False,
-                    size_x=self._rdr[0].shape[4],
-                    size_y=self._rdr[0].shape[3],
-                    size_z=self._rdr[0].shape[2],
-                    size_c=self._rdr[0].shape[1],
-                    size_t=self._rdr[0].shape[0],
+                    size_x=size_x,
+                    size_y=size_y,
+                    size_z=size_z,
+                    size_c=size_c,
+                    size_t=size_t,
                     channels=[],
                     type=ome_dtype,
                 )
