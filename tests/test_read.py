@@ -45,35 +45,32 @@ def setUpModule():
         else:
             download(url, str(TEST_DIR))
 
+    """Load the czi image, and save as a npy file for further testing."""
+    with bfio.BioReader(
+        TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
+    ) as br:
+        np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
+        zf = zarr.open(
+            str(TEST_DIR.joinpath("4d_array.zarr")),
+            mode="w",
+            shape=(1, br.C, br.Z, br.Y, br.X),
+            dtype=br.dtype,
+            chunks=(1, 1, 1, 1024, 1024),
+        )
+        for t in range(1):
+            for c in range(br.C):
+                for z in range(br.Z):
+                    zf[t, c, z, :, :] = br[:, :, z, c, t]
 
-# def tearDownModule():
-#     """ Remove test images """
 
-#     logger.info('teardown - Removing test images...')
-#     shutil.rmtree(TEST_DIR)
+def tearDownModule():
+    """Remove test images"""
+
+    logger.info("teardown - Removing test images...")
+    shutil.rmtree(TEST_DIR)
 
 
 class TestSimpleRead(unittest.TestCase):
-    @classmethod
-    def tearDownClass(self):
-        """Load the czi image, and save as a npy file for further testing."""
-
-        with bfio.BioReader(
-            TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
-        ) as br:
-            np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
-            zf = zarr.open(
-                str(TEST_DIR.joinpath("4d_array.zarr")),
-                mode="w",
-                shape=(1, br.C, br.Z, br.Y, br.X),
-                dtype=br.dtype,
-                chunks=(1, 1, 1, 1024, 1024),
-            )
-            for t in range(1):
-                for c in range(br.C):
-                    for z in range(br.Z):
-                        zf[t, c, z, :, :] = br[:, :, z, c, t]
-
     def test_bioformats(self):
         """test_bioformats - Fails if Java/JPype improperly configured"""
 
