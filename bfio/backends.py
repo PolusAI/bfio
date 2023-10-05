@@ -1588,17 +1588,20 @@ try:
 
             if self._axes_list == []:
                 self._get_axis_info()
+
+            # actual zarr array can be of 2-5D, but bfio interface
+            # is 5D
             requested_slices = []
 
             if "t" in self._axes_list:
-                requested_slices.append(slice(T[1],T[1]+1))
+                requested_slices.append(slice(T[1], T[1] + 1))
             if "c" in self._axes_list:
-                requested_slices.append(slice(C[1],C[1]+1))
+                requested_slices.append(slice(C[1], C[1] + 1))
             if "z" in self._axes_list:
-                requested_slices.append(slice(Z[1],Z[1]+1))
+                requested_slices.append(slice(Z[1], Z[1] + 1))
 
-            requested_slices.append(slice(Y[1],Y[1]+ts))
-            requested_slices.append(slice(X[1],X[1]+ts))
+            requested_slices.append(slice(Y[1], Y[1] + ts))
+            requested_slices.append(slice(X[1], X[1] + ts))
 
             data = self._rdr[tuple(requested_slices)]
 
