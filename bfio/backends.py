@@ -1605,7 +1605,7 @@ try:
             self._image[
                 Y[0] : Y[0] + data.shape[-2],
                 X[0] : X[0] + data.shape[-1],
-                Z[0] ,
+                Z[0],
                 C[0],
                 T[0],
             ] = data

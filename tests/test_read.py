@@ -78,11 +78,17 @@ class TestSimpleRead(unittest.TestCase):
             TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
         ) as br:
             np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
-            zf = zarr.open(str(TEST_DIR.joinpath('4d_array.zarr')), mode="w", shape=(1,br.C,br.Z,br.Y,br.X), dtype=br.dtype, chunks=(1,1,1,1024,1024))
+            zf = zarr.open(
+                str(TEST_DIR.joinpath("4d_array.zarr")),
+                mode="w",
+                shape=(1, br.C, br.Z, br.Y, br.X),
+                dtype=br.dtype,
+                chunks=(1, 1, 1, 1024, 1024),
+            )
             for t in range(1):
                 for c in range(br.C):
                     for z in range(br.Z):
-                        zf[t,c,z,:,:] = br[:,:,z,c,t]
+                        zf[t, c, z, :, :] = br[:, :, z, c, t]
 
     def test_bioformats(self):
         """test_bioformats - Fails if Java/JPype improperly configured"""
@@ -124,7 +130,6 @@ class TestSimpleRead(unittest.TestCase):
     def test_read_zarr_auto(self):
         """test_read_zarr_auto - Read ome zarr, should load zarr backend"""
         with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
-
             self.assertEqual(br._backend_name, "zarr")
 
             I = br[:]
@@ -234,7 +239,7 @@ class TestZarrReader(unittest.TestCase):
         """Testing metadata dimension attributes"""
         with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr"), backend="zarr") as br:
             get_dims(br)
-            assert br.shape ==  (512, 672, 21, 3)
+            assert br.shape == (512, 672, 21, 3)
 
     def test_get_pixel_size(self):
         """Testing metadata pixel sizes"""
