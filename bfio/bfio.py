@@ -156,7 +156,7 @@ class BioReader(BioBase):
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
 
-    def python_backend_support(self, filename: typing[str]):
+    def python_backend_support(self, filename: str):
         with tifffile.TiffFile(filename) as tif:
             if not tif.pages[0].is_tiled:
                 return False
@@ -168,7 +168,7 @@ class BioReader(BioBase):
                     return False
         return True
 
-    def auto_select_backend(self, filename: typing[str]) -> str:
+    def auto_select_backend(self, filename: str) -> str:
         extension = "".join(self._file_path.suffixes)
         if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
             # # check if it satisfies all the condition for python backend
