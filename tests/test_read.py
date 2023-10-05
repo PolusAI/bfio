@@ -236,20 +236,20 @@ class TestZarrReader(unittest.TestCase):
             get_dims(br)
             assert br.shape ==  (512, 672, 21, 3)
 
-#     def test_get_pixel_size(self):
-#         """Testing metadata pixel sizes"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_pixel_size(br)
+    def test_get_pixel_size(self):
+        """Testing metadata pixel sizes"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_pixel_size(br)
 
-#     def test_get_pixel_info(self):
-#         """Testing metadata pixel information"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_pixel_info(br)
+    def test_get_pixel_info(self):
+        """Testing metadata pixel information"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_pixel_info(br)
 
-#     def test_get_channel_names(self):
-#         """Testing metadata channel names"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_channel_names(br)
+    def test_get_channel_names(self):
+        """Testing metadata channel names"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_channel_names(br)
 
 
 class TestZarrMetadata(unittest.TestCase):
