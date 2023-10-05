@@ -215,7 +215,7 @@ class BioReader(BioBase):
                     backend = "python"
                 else:
                     backend = "bioformats"
-            elif extension.endswith(".ome.zarr"):
+            elif extension.endswith(".zarr"):
                 # if path exists, make sure it is a directory
                 if not Path.is_dir(self._file_path):
                     self.logger.warning(
@@ -826,13 +826,22 @@ class BioReader(BioBase):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
+        # Nested function to locate zarray file for the top level
+        def find_file_recursive(directory_path, filename):
+            file_list = sorted(list(directory_path.rglob(filename)))
+            if len(file_list) > 0:
+                return str(file_list[0])
+            return None
+
         # Handle a zarr file
-        if filepath.name.endswith("ome.zarr"):
-            with open(filepath.joinpath("0").joinpath(".zarray"), "r") as fr:
-                zarray = json.load(fr)
-                height = zarray["shape"][3]
-                width = zarray["shape"][4]
-            return width, height
+        if filepath.name.endswith(".zarr"):
+            zarray_path = find_file_recursive(filepath, ".zarray")
+            if zarray_path is not None:
+                with open(zarray_path, "r") as fr:
+                    zarray = json.load(fr)
+                    height = zarray["shape"][3]
+                    width = zarray["shape"][4]
+                return width, height
 
         height = -1
         width = -1
@@ -1045,8 +1054,8 @@ class BioWriter(BioBase):
 
         if not self._file_path.name.endswith(
             ".ome.tif"
-        ) and not self._file_path.name.endswith(".ome.tif"):
-            ValueError("The file extension must be .ome.tif or .ome.zarr")
+        ) and not self._file_path.name.endswith(".zarr"):
+            ValueError("The file extension must be .ome.tif or .zarr")
 
         if len(self.metadata.images) > 1:
             self.logger.warning(
@@ -1093,7 +1102,7 @@ class BioWriter(BioBase):
             extension = "".join(self._file_path.suffixes)
             if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
                 backend = "python"
-            elif extension.endswith(".ome.zarr"):
+            elif extension.endswith(".zarr"):
                 # make sure we can create a directory
                 if Path.exists(self._file_path) and Path.is_file(self._file_path):
                     self.logger.warning(
