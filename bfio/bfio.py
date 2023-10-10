@@ -156,20 +156,40 @@ class BioReader(BioBase):
         # Get dims to speed up validation checks
         self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
 
-    def set_backend(self, backend: typing.Optional[str] = None) -> None:
-        # nested helper function
-        def python_backend_support():
-            with tifffile.TiffFile(self._file_path) as tif:
-                if not tif.pages[0].is_tiled:
+    def python_backend_support(self, filename: str):
+        with tifffile.TiffFile(filename) as tif:
+            if not tif.pages[0].is_tiled:
+                return False
+            else:
+                if (
+                    tif.pages[0].tilewidth < self._TILE_SIZE
+                    or tif.pages[0].tilewidth < self._TILE_SIZE
+                ):
                     return False
-                else:
-                    if (
-                        tif.pages[0].tilewidth < self._TILE_SIZE
-                        or tif.pages[0].tilewidth < self._TILE_SIZE
-                    ):
-                        return False
-            return True
+        return True
 
+    def auto_select_backend(self, filename: str) -> str:
+        extension = "".join(self._file_path.suffixes)
+        if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
+            # # check if it satisfies all the condition for python backend
+            if self.python_backend_support(filename):
+                return "python"
+            else:
+                return "bioformats"
+        elif extension.endswith(".zarr"):
+            # if path exists, make sure it is a directory
+            if not Path.is_dir(self._file_path):
+                self.logger.warning(
+                    "Zarr backend is selected but the path is not a directory,"
+                    + " switching to bioformats backend."
+                )
+                return "bioformats"
+            else:
+                return "zarr"
+        else:
+            return "bioformats"
+
+    def set_backend(self, backend: typing.Optional[str] = None) -> None:
         # validate/set the backend
         if backend is not None and backend.lower() not in [
             "python",
@@ -179,54 +199,39 @@ class BioReader(BioBase):
             raise ValueError(
                 'Keyword argument backend must be one of ["python","bioformats","zarr"]'
             )
-        if backend == "python":
+
+        # if backend not given, set backend
+        # otherwise check if backend is appropriate
+        if backend is None:
+            backend = self.auto_select_backend(self._file_path)
+
+        elif backend == "python":
             extension = "".join(self._file_path.suffixes)
             if not (extension.endswith(".ome.tif") or extension.endswith(".ome.tiff")):
                 self.logger.warning(
                     "Python backend only works for tiled OME Tiff files,"
                     + " switching to bioformats backend."
                 )
-                backend = "bioformats"
+                backend = self.auto_select_backend(self._file_path)
             else:
                 # extension is ome.tiff or ome.tif, check if it is tiled or not
                 # check if it satisfies all the condition for python backend
-                if not python_backend_support():
+                if not self.python_backend_support(self._file_path):
                     self.logger.warning(
                         "Python backend only works for tiled OME Tiff files with "
                         + "minimum tile size of 1024x1024, switching to bioformats"
                         + " backend."
                     )
-                    backend = "bioformats"
+                    backend = self.auto_select_backend(self._file_path)
 
-        if backend == "zarr":
+        elif backend == "zarr":
             # make sure it is a directory
             if not Path.is_dir(self._file_path):
                 self.logger.warning(
                     "Zarr backend is selected but the path is not a directory,"
                     + " switching to bioformats backend."
                 )
-                backend = "bioformats"
-
-        if backend is None:
-            extension = "".join(self._file_path.suffixes)
-            if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
-                # # check if it satisfies all the condition for python backend
-                if python_backend_support():
-                    backend = "python"
-                else:
-                    backend = "bioformats"
-            elif extension.endswith(".ome.zarr"):
-                # if path exists, make sure it is a directory
-                if not Path.is_dir(self._file_path):
-                    self.logger.warning(
-                        "Zarr backend is selected but the path is not a directory,"
-                        + " switching to bioformats backend."
-                    )
-                    backend = "bioformats"
-                else:
-                    backend = "zarr"
-            else:
-                backend = "bioformats"
+                backend = self.auto_select_backend(self._file_path)
 
         self._backend_name = backend.lower()
 
@@ -826,13 +831,22 @@ class BioReader(BioBase):
         if isinstance(filepath, str):
             filepath = Path(filepath)
 
+        # Nested function to locate zarray file for the top level
+        def find_file_recursive(directory_path, filename):
+            file_list = sorted(list(directory_path.rglob(filename)))
+            if len(file_list) > 0:
+                return str(file_list[0])
+            return None
+
         # Handle a zarr file
-        if filepath.name.endswith("ome.zarr"):
-            with open(filepath.joinpath("0").joinpath(".zarray"), "r") as fr:
-                zarray = json.load(fr)
-                height = zarray["shape"][3]
-                width = zarray["shape"][4]
-            return width, height
+        if filepath.name.endswith(".zarr"):
+            zarray_path = find_file_recursive(filepath, ".zarray")
+            if zarray_path is not None:
+                with open(zarray_path, "r") as fr:
+                    zarray = json.load(fr)
+                    height = zarray["shape"][3]
+                    width = zarray["shape"][4]
+                return width, height
 
         height = -1
         width = -1
@@ -1045,8 +1059,8 @@ class BioWriter(BioBase):
 
         if not self._file_path.name.endswith(
             ".ome.tif"
-        ) and not self._file_path.name.endswith(".ome.tif"):
-            ValueError("The file extension must be .ome.tif or .ome.zarr")
+        ) and not self._file_path.name.endswith(".zarr"):
+            ValueError("The file extension must be .ome.tif or .zarr")
 
         if len(self.metadata.images) > 1:
             self.logger.warning(
@@ -1093,7 +1107,7 @@ class BioWriter(BioBase):
             extension = "".join(self._file_path.suffixes)
             if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
                 backend = "python"
-            elif extension.endswith(".ome.zarr"):
+            elif extension.endswith(".zarr"):
                 # make sure we can create a directory
                 if Path.exists(self._file_path) and Path.is_file(self._file_path):
                     self.logger.warning(

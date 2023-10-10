@@ -1448,10 +1448,51 @@ try:
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
+            try:
+                self._root = zarr.open(
+                    str(self.frontend._file_path.resolve()), mode="r"
+                )
+            except zarr.errors.PathNotFoundError:
+                # a workaround for pre-compute slide output directory structure
+                data_zarr_path = str(self.frontend._file_path.resolve()) + "/data.zarr"
+                self._root = zarr.open(data_zarr_path, mode="r")
 
-            self._root = zarr.open(str(self.frontend._file_path.resolve()), mode="r")
+            if isinstance(self._root, zarr.core.Array):
+                self._rdr = self._root
+            elif isinstance(self._root, zarr.hierarchy.Group):
+                # the top level is a group, check if this has any arrays
+                num_arrays = len(sorted(self._root.array_keys()))
+                if num_arrays > 0:
+                    self._rdr = self._root[next(self._root.array_keys())]
+                else:
+                    # need to go one more level
+                    self._root = self._root[next(self._root.group_keys())]
+                    self._rdr = self._root[next(self._root.array_keys())]
+            else:
+                pass
 
-            self._rdr = self._root["0"]
+            self._axes_list = []
+
+        def _get_axis_info(self):
+            shape_len = len(self._rdr.shape)
+            if shape_len == 5:
+                self._axes_list = ["t", "c", "z", "y", "x"]
+            else:
+                try:
+                    axes_metadata = self._root.attrs["multiscales"][0]["axes"]
+                    for axes in axes_metadata:
+                        self._axes_list.append(axes["name"])
+                except AttributeError or KeyError:
+                    self.logger.warning(
+                        "Unable to find multiscales metadata. Z, C and T "
+                        + "dimensions might be incorrect."
+                    )
+                    if shape_len == 4:
+                        self._axes_list = ["c", "z", "y", "x"]
+                    elif shape_len == 3:
+                        self._axes_list = ["z", "y", "x"]
+                    elif shape_len == 2:
+                        self._axes_list = ["y", "x"]
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
@@ -1479,18 +1520,52 @@ try:
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
                 omexml = ome_types.model.OME.model_construct()
-                ome_dtype = self._rdr[0].dtype.name
+                ome_dtype = self._rdr.dtype.name
+                if ome_dtype == "float64":
+                    ome_dtype = "double"  # to match ome_types pydantic model
+                elif ome_dtype == "float32":
+                    ome_dtype = "float"  # to match ome_types pydantic model
+                else:
+                    pass
                 # this is speculation, since each array in a group, in theory,
                 # can have distinct properties
                 ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+                size_x = 1
+                size_y = 1
+                size_z = 1
+                size_c = 1
+                size_t = 1
+
+                assert len(self._rdr.shape) >= 2
+                self._get_axis_info()
+
+                if len(self._rdr.shape) == 5:
+                    # 5D data, we know what to do
+                    size_x = self._rdr.shape[4]
+                    size_y = self._rdr.shape[3]
+                    size_z = self._rdr.shape[2]
+                    size_c = self._rdr.shape[1]
+                    size_t = self._rdr.shape[0]
+                else:
+                    # last two dims are X and Y
+                    size_x = self._rdr.shape[-1]
+                    size_y = self._rdr.shape[-2]
+                    # update z, c and t if any info available
+                    if "z" in self._axes_list:
+                        size_z = self._rdr.shape[self._axes_list.index("z")]
+                    if "c" in self._axes_list:
+                        size_c = self._rdr.shape[self._axes_list.index("c")]
+                    if "t" in self._axes_list:
+                        size_t = self._rdr.shape[self._axes_list.index("t")]
+
                 ome_pixel = ome_types.model.Pixels(
                     dimension_order=ome_dim_order,
                     big_endian=False,
-                    size_x=self._rdr[0].shape[4],
-                    size_y=self._rdr[0].shape[3],
-                    size_z=self._rdr[0].shape[2],
-                    size_c=self._rdr[0].shape[1],
-                    size_t=self._rdr[0].shape[0],
+                    size_x=size_x,
+                    size_y=size_y,
+                    size_z=size_z,
+                    size_c=size_c,
+                    size_t=size_t,
                     channels=[],
                     type=ome_dtype,
                 )
@@ -1511,17 +1586,29 @@ try:
 
             ts = self.frontend._TILE_SIZE
 
-            data = self._rdr[
-                T[1], C[1], Z[1] : Z[1] + 1, Y[1] : Y[1] + ts, X[1] : X[1] + ts
-            ]
+            if self._axes_list == []:
+                self._get_axis_info()
 
+            # actual zarr array can be of 2-5D, but bfio interface
+            # is 5D
+            requested_slices = []
+            if "t" in self._axes_list:
+                requested_slices.append(slice(T[1], T[1] + 1))
+            if "c" in self._axes_list:
+                requested_slices.append(slice(C[1], C[1] + 1))
+            if "z" in self._axes_list:
+                requested_slices.append(slice(Z[1], Z[1] + 1))
+
+            requested_slices.append(slice(Y[1], Y[1] + ts))
+            requested_slices.append(slice(X[1], X[1] + ts))
+            data = self._rdr[tuple(requested_slices)].squeeze()
             self._image[
                 Y[0] : Y[0] + data.shape[-2],
                 X[0] : X[0] + data.shape[-1],
-                Z[0] : Z[0] + 1,
+                Z[0],
                 C[0],
                 T[0],
-            ] = data.transpose(1, 2, 0)
+            ] = data
 
         def _read_image(self, X, Y, Z, C, T, output):
             if self.frontend.max_workers > 1:

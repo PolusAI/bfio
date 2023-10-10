@@ -43,6 +43,7 @@ setup(
     ],
     extras_require={
         "dev": [
+            "ome_zarr",
             "requests>=2.26.0",
         ],
     },

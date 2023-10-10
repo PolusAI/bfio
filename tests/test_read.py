@@ -3,9 +3,11 @@ import unittest
 import requests, io, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
+import zarr
+from ome_zarr.utils import download as zarr_download
 
 TEST_IMAGES = {
-    # "1884807.ome.zarr": "https://s3.embassy.ebi.ac.uk/idr/zarr/v0.1/1884807.zarr/",
+    "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
     "img_r001_c001.ome.tif": "https://github.com/usnistgov/WIPP/raw/master/data/PyramidBuilding/inputCollection/img_r001_c001.ome.tif",
@@ -31,7 +33,7 @@ def setUpModule():
     for file, url in TEST_IMAGES.items():
         logger.info(f"setup - Downloading: {file}")
 
-        if not file.endswith(".ome.zarr"):
+        if not file.endswith(".zarr"):
             if TEST_DIR.joinpath(file).exists():
                 continue
 
@@ -40,44 +42,34 @@ def setUpModule():
             with open(TEST_DIR.joinpath(file), "wb") as fw:
                 fw.write(r.content)
         else:
-            base_path = TEST_DIR.joinpath(file)
-            base_path.mkdir()
-            base_path.joinpath("0").mkdir()
+            zarr_download(url, str(TEST_DIR))
 
-            units = [
-                ".zattrs",
-                ".zgroup",
-                "0/.zarray",
-                "0/0.0.0.0.0",
-                "0/0.1.0.0.0",
-                "0/0.2.0.0.0",
-            ]
+    """Load the czi image, and save as a npy file for further testing."""
+    with bfio.BioReader(
+        TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
+    ) as br:
+        np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
+        zf = zarr.open(
+            str(TEST_DIR.joinpath("4d_array.zarr")),
+            mode="w",
+            shape=(1, br.C, br.Z, br.Y, br.X),
+            dtype=br.dtype,
+            chunks=(1, 1, 1, 1024, 1024),
+        )
+        for t in range(1):
+            for c in range(br.C):
+                for z in range(br.Z):
+                    zf[t, c, z, :, :] = br[:, :, z, c, t]
 
-            for u in units:
-                if base_path.joinpath(u).exists():
-                    continue
 
-                with open(base_path.joinpath(u), "wb") as fw:
-                    fw.write(requests.get(url + u).content)
+def tearDownModule():
+    """Remove test images"""
 
-
-# def tearDownModule():
-#     """ Remove test images """
-
-#     logger.info('teardown - Removing test images...')
-#     shutil.rmtree(TEST_DIR)
+    logger.info("teardown - Removing test images...")
+    shutil.rmtree(TEST_DIR)
 
 
 class TestSimpleRead(unittest.TestCase):
-    @classmethod
-    def tearDownClass(self):
-        """Load the czi image, and save as a npy file for further testing."""
-
-        with bfio.BioReader(
-            TEST_DIR.joinpath("Plate1-Blue-A-12-Scene-3-P3-F2-03.czi")
-        ) as br:
-            np.save(TEST_DIR.joinpath("4d_array.npy"), br[:])
-
     def test_bioformats(self):
         """test_bioformats - Fails if Java/JPype improperly configured"""
 
@@ -115,15 +107,14 @@ class TestSimpleRead(unittest.TestCase):
 
             I = br[:]
 
-    # def test_read_zarr_auto(self):
-    #     """test_read_zarr_auto - Read ome zarr, should load zarr backend"""
-    #     with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
+    def test_read_zarr_auto(self):
+        """test_read_zarr_auto - Read ome zarr, should load zarr backend"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            self.assertEqual(br._backend_name, "zarr")
 
-    #         self.assertEqual(br._backend_name, "zarr")
+            I = br[:]
 
-    #         I = br[:]
-
-    #         logger.info(I.shape)
+            logger.info(I.shape)
 
     def test_read_ome_tif_strip_auto(self):
         """test_read_ome_tif_strip_auto - Read tiff using Java backend"""
@@ -223,42 +214,43 @@ class TestJavaReader(unittest.TestCase):
             get_channel_names(br)
 
 
-# class TestZarrReader(unittest.TestCase):
-#     def test_get_dims(self):
-#         """Testing metadata dimension attributes"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_dims(br)
+class TestZarrReader(unittest.TestCase):
+    def test_get_dims(self):
+        """Testing metadata dimension attributes"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr"), backend="zarr") as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (512, 672, 21, 3))
 
-#     def test_get_pixel_size(self):
-#         """Testing metadata pixel sizes"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_pixel_size(br)
+    def test_get_pixel_size(self):
+        """Testing metadata pixel sizes"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_pixel_size(br)
 
-#     def test_get_pixel_info(self):
-#         """Testing metadata pixel information"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_pixel_info(br)
+    def test_get_pixel_info(self):
+        """Testing metadata pixel information"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_pixel_info(br)
 
-#     def test_get_channel_names(self):
-#         """Testing metadata channel names"""
-#         with bfio.BioReader(TEST_DIR.joinpath("1884807.ome.zarr")) as br:
-#             get_channel_names(br)
+    def test_get_channel_names(self):
+        """Testing metadata channel names"""
+        with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
+            get_channel_names(br)
 
 
-# class TestZarrMetadata(unittest.TestCase):
-#     def test_set_metadata(self):
-#         """Testing metadata dimension attributes"""
-#         cname = ["test"]
+class TestZarrMetadata(unittest.TestCase):
+    def test_set_metadata(self):
+        """Testing metadata dimension attributes"""
+        cname = ["test"]
 
-#         image = np.load(TEST_DIR.joinpath("4d_array.npy"))
+        image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
-#         with bfio.BioWriter(TEST_DIR.joinpath("test_cname.ome.zarr")) as bw:
-#             bw.cnames = cname
-#             bw.ps_x = (100, "nm")
-#             bw.shape = image.shape
-#             bw[:] = image
+        with bfio.BioWriter(TEST_DIR.joinpath("test_cname.ome.zarr")) as bw:
+            bw.cnames = cname
+            bw.ps_x = (100, "nm")
+            bw.shape = image.shape
+            bw[:] = image
 
-#         with bfio.BioReader(TEST_DIR.joinpath("test_cname.ome.zarr")) as br:
-#             logger.info(br.cnames)
-#             logger.info(br.ps_x)
-#             self.assertEqual(br.cnames[0], cname[0])
+        with bfio.BioReader(TEST_DIR.joinpath("test_cname.ome.zarr")) as br:
+            logger.info(br.cnames)
+            logger.info(br.ps_x)
+            self.assertEqual(br.cnames[0], cname[0])
