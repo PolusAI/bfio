@@ -17,6 +17,7 @@ import ome_types
 import re
 from tifffile import tifffile
 from xml.etree import ElementTree as ET
+from xsdata.utils.dates import DateTimeParser
 
 # bfio internals
 import bfio
@@ -31,6 +32,7 @@ logger = logging.getLogger("bfio.backends")
 KNOWN_INVALID_OME_XSD_REFERENCES = [
     "www.openmicroscopy.org/Schemas/ome/2013-06",
     "www.openmicroscopy.org/Schemas/OME/2012-03",
+    "www.openmicroscopy.org/Schemas/sa/2013-06s",
 ]
 REPLACEMENT_OME_XSD_REFERENCE = "www.openmicroscopy.org/Schemas/OME/2016-06"
 
@@ -123,6 +125,15 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
                     f"Updated attribute 'ID' from '{image_id}' to '{ome_image_id}' "
                     f"on Image element at position {image_index}."
                 )
+        # Fix bad acquisition date refs
+        acq_date_ref = image.find(f"{namespace}AcquisitionDate")
+        if acq_date_ref is not None:
+            try:
+                parser = DateTimeParser(acq_date_ref.text, "%Y-%m-%dT%H:%M:%S%z")
+                next(parser.parse())
+            except ValueError:
+                image.remove(acq_date_ref)
+                metadata_changes.append("Removed badly formatted AcquisitionDate.")
 
         # Fix MicroManager bad instrument refs
         instrument_ref = image.find(f"{namespace}InstrumentRef")
@@ -428,7 +439,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
                 self._metadata = ome_types.from_xml(
                     self._rdr.ome_metadata, validate=False
                 )
-            except ET.ParseError:
+            except (ET.ParseError, ValueError):
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata)
                     self._metadata = ome_types.from_xml(cleaned, validate=False)
