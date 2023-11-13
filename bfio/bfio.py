@@ -29,7 +29,7 @@ try:
         """
 
         global JAR_VERSION
-        scyjava.config.endpoints.append("ome:formats-gpl:6.7.0")
+        scyjava.config.endpoints.append("ome:formats-gpl:7.0.1")
         scyjava.start_jvm()
         loci = jpype.JPackage("loci")
         loci.common.DebugTools.setRootLevel("ERROR")
