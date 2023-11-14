@@ -31,7 +31,7 @@ try:
 
         global JAR_VERSION
         if system() == "Darwin" and processor() == "arm":
-            scyjava.config.endpoints.append("ome:formats-gpl:6.14.0")
+            scyjava.config.endpoints.append("ome:formats-gpl:7.0.0")
         else:
             scyjava.config.endpoints.append("ome:formats-gpl:7.0.1")
         scyjava.start_jvm()
