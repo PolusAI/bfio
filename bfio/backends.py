@@ -65,7 +65,6 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
                 f"'{REPLACEMENT_OME_XSD_REFERENCE}'."
             )
 
-
     # Read in XML
     try:
         root = ET.fromstring(xml)
