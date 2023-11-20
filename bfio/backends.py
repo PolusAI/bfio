@@ -66,7 +66,12 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
             )
 
     # Read in XML
-    root = ET.fromstring(xml)
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        # remove special char if initial parsing fails
+        xml = xml.replace("&#0;", "")
+        root = ET.fromstring(xml)
 
     # Get the namespace
     # In XML etree this looks like

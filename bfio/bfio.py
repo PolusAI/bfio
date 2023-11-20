@@ -5,6 +5,7 @@ import struct
 import typing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from platform import processor, system
 
 import numpy
 import ome_types
@@ -29,7 +30,10 @@ try:
         """
 
         global JAR_VERSION
-        scyjava.config.endpoints.append("ome:formats-gpl:6.7.0")
+        if system() == "Darwin" and processor() == "arm":
+            scyjava.config.endpoints.append("ome:formats-gpl:7.0.0")
+        else:
+            scyjava.config.endpoints.append("ome:formats-gpl:7.0.1")
         scyjava.start_jvm()
         loci = jpype.JPackage("loci")
         loci.common.DebugTools.setRootLevel("ERROR")
