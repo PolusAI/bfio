@@ -540,7 +540,13 @@ class PythonReader(bfio.base_classes.AbstractReader):
             width = out.shape[6]
             height = out.shape[5]
             out[
-                d[0], c[0], t[0], l[0] // self._TILE_SIZE[0], w[0] // self._TILE_SIZE[1], :height, :width
+                d[0],
+                c[0],
+                t[0],
+                l[0] // self._TILE_SIZE[0],
+                w[0] // self._TILE_SIZE[1],
+                :height,
+                :width,
             ] = segment[0, :height, :width, 0]
         else:
             width = min(out.shape[4] - w[0], self._TILE_SIZE[1])
