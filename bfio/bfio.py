@@ -355,7 +355,7 @@ class BioReader(BioBase):
         # slow storing tiles without reshaping.
         # fast storing tiles is aligned memory, where slow storing is unaligned
         load_tiles = 10 * (
-            X_tile_shape * Y_tile_shape / 1024**2 + 1
+            (X_tile_shape * Y_tile_shape) / (self._TILE_SIZE**2) + 1
         ) < Z_tile_shape * len(C) * len(T)
 
         # Initialize the output for zarr and bioformats
@@ -370,15 +370,15 @@ class BioReader(BioBase):
         # TODO: Should use this same scheme for the other readers to reduce copy times
         else:
             if load_tiles:
-                y_tile = min(Y[1] - Y[0], 1024)
-                x_tile = min(X[1] - X[0], 1024)
+                y_tile = min(Y[1] - Y[0], self._TILE_SIZE)
+                x_tile = min(X[1] - X[0], self._TILE_SIZE)
                 output = numpy.zeros(
                     [
                         Z_tile_shape,
                         len(C),
                         len(T),
-                        Y_tile_shape // 1024,
-                        X_tile_shape // 1024,
+                        Y_tile_shape // self._TILE_SIZE,
+                        X_tile_shape // self._TILE_SIZE,
                         y_tile,
                         x_tile,
                     ],
@@ -387,7 +387,7 @@ class BioReader(BioBase):
                 )
             else:
                 output = numpy.zeros(
-                    [Z_tile_shape, len(C), len(T), Y[1] - Y[0], X[1] - X[0]],
+                    [Z_tile_shape, len(C), len(T), Y_tile_shape, X_tile_shape],
                     dtype=self.dtype,
                     order="C",
                 )
@@ -402,8 +402,8 @@ class BioReader(BioBase):
         if self._backend_name == "python":
             if load_tiles:
                 output = output.transpose(3, 5, 4, 6, 0, 1, 2)
-                X_tile_shape = X_tile_shape if x_tile == 1024 else X[1] - X[0]
-                Y_tile_shape = Y_tile_shape if y_tile == 1024 else Y[1] - Y[0]
+                X_tile_shape = X_tile_shape if x_tile == self._TILE_SIZE else X[1] - X[0]
+                Y_tile_shape = Y_tile_shape if y_tile == self._TILE_SIZE else Y[1] - Y[0]
                 output = output.reshape(
                     Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
                 )

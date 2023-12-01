@@ -536,14 +536,15 @@ class PythonReader(bfio.base_classes.AbstractReader):
             "_process_chunk(): (w,l,d) = {},{},{}".format(w[0], l[0], d[0])
         )
 
-        width = min(keyframe.imagewidth - w[1], self._TILE_SIZE[1])
-        height = min(keyframe.imagelength - l[1], self._TILE_SIZE[0])
-
         if self.load_tiles:
+            width = out.shape[6]
+            height = out.shape[5]
             out[
-                d[0], c[0], t[0], l[0] // 1024, w[0] // 1024, :height, :width
+                d[0], c[0], t[0], l[0] // self._TILE_SIZE[0], w[0] // self._TILE_SIZE[1], :height, :width
             ] = segment[0, :height, :width, 0]
         else:
+            width = min(out.shape[4] - w[0], self._TILE_SIZE[1])
+            height = min(out.shape[3] - l[0], self._TILE_SIZE[0])
             out[d[0], c[0], t[0], l[0] : l[0] + height, w[0] : w[0] + width] = segment[
                 0, :height, :width, 0
             ]
