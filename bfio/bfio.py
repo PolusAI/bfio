@@ -370,8 +370,8 @@ class BioReader(BioBase):
         # TODO: Should use this same scheme for the other readers to reduce copy times
         else:
             if load_tiles:
-                y_tile = min(Y[1] - Y[0], self._TILE_SIZE)
-                x_tile = min(X[1] - X[0], self._TILE_SIZE)
+                y_tile = self._TILE_SIZE
+                x_tile = self._TILE_SIZE
                 output = numpy.zeros(
                     [
                         Z_tile_shape,
@@ -402,8 +402,6 @@ class BioReader(BioBase):
         if self._backend_name == "python":
             if load_tiles:
                 output = output.transpose(3, 5, 4, 6, 0, 1, 2)
-                X_tile_shape = X_tile_shape if x_tile == self._TILE_SIZE else X[1] - X[0]
-                Y_tile_shape = Y_tile_shape if y_tile == self._TILE_SIZE else Y[1] - Y[0]
                 output = output.reshape(
                     Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
                 )
