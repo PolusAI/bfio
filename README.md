@@ -1,8 +1,10 @@
 # **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.3.3)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
-[![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/filepattern/)
+[![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/bfio/)
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/bfio)
+[![Conda](https://img.shields.io/conda/v/conda-forge/bfio)](https://anaconda.org/conda-forge/bfio)
+[![Conda Downloads](https://img.shields.io/conda/dn/conda-forge/bfio?label=Conda%20downloads)](https://anaconda.org/conda-forge/bfio)
 ![Bower](https://img.shields.io/bower/l/MI)
 
 This tool is a simplified but powerful interface to
