@@ -75,7 +75,8 @@ repository](https://github.com/PurpleBooth/a-good-readme-template/tags).
 
 ## Authors
 
-Nick Schaub (nick.schaub@nih.gov, nick.schaub@labshare.org)
+Nick Schaub (nick.schaub@nih.gov, nick.schaub@axleinfo.com)
+Sameeul B Samee (sameeul.samee@axleinfo.com)
 
 ## License
 

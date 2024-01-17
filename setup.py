@@ -21,7 +21,7 @@ setup(
     long_description_content_type="text/markdown",
     project_urls={
         "Documentation": "https://bfio.readthedocs.io/en/latest/",
-        "Source": "https://github.com/labshare/bfio",
+        "Source": "https://github.com/PolusAI/bfio",
     },
     packages=find_packages(),
     package_data={"bfio": ["VERSION"]},
