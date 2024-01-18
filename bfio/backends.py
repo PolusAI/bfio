@@ -1537,7 +1537,7 @@ try:
                     self.close()
                     raise ValueError(
                         "Level is specified but the zarr file does not contain "
-                        + "multiple resoulution."
+                        + "multiple resoulutions."
                     )
                 elif isinstance(self._root, zarr.hierarchy.Group):
                     if len(sorted(self._root.array_keys())) > self.frontend.level:
@@ -1604,12 +1604,8 @@ try:
                             raise
 
                 if self.frontend.level is not None:
-                    setattr(
-                        self._metadata.images[0].pixels, "size_x", self._rdr.shape[-1]
-                    )
-                    setattr(
-                        self._metadata.images[0].pixels, "size_y", self._rdr.shape[-2]
-                    )
+                    self._metadata.images[0].pixels.size_x = self._rdr.shape[-1]
+                    self._metadata.images[0].pixels.size_y = self._rdr.shape[-2]
 
                 return self._metadata
             else:
