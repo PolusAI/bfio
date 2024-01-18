@@ -382,8 +382,8 @@ class PythonReader(bfio.base_classes.AbstractReader):
                 if len(series.levels) <= self.frontend.level:
                     self.close()
                     raise ValueError(
-                        "{} does not have a resolution level of value {}".format(
-                            frontend._file_path.name, self.frontend.level
+                        "{} does not have a resolution level {}.".format(
+                            self.frontend._file_path.name, self.frontend.level
                         )
                     )
                 else:
@@ -1243,6 +1243,16 @@ try:
             self._rdr.setOriginalMetadataPopulated(True)
             self._rdr.setMetadataStore(self.omexml)
             self._rdr.setId(JString(str(self.frontend._file_path.absolute())))
+            if self.frontend.level is not None:
+                if self._rdr.getSeriesCount() > self.frontend.level:
+                    self._rdr.setSeries(self.frontend.level)
+                else:
+                    self.close()
+                    raise ValueError(
+                        "{} does not have a resolution level {}.".format(
+                            self.frontend._file_path.name, self.frontend.level
+                        )
+                    )
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
@@ -1251,7 +1261,11 @@ try:
                 self._metadata = ome_types.from_xml(
                     clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
                 )
-
+            if (
+                self.frontend.level is not None
+                and len(self._metadata.images) > self.frontend.level
+            ):
+                self._metadata.images = [self._metadata.images[self.frontend.level]]
             return self._metadata
 
         def _read_image(self, X, Y, Z, C, T, output):
@@ -1493,7 +1507,7 @@ try:
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
-            print(f"Level is {self.frontend.level}")
+            self.logger.debug(f"Level is {self.frontend.level}")
 
             try:
                 self._root = zarr.open(
@@ -1588,6 +1602,14 @@ try:
                             )
                         else:
                             raise
+
+                if self.frontend.level is not None:
+                    setattr(
+                        self._metadata.images[0].pixels, "size_x", self._rdr.shape[-1]
+                    )
+                    setattr(
+                        self._metadata.images[0].pixels, "size_y", self._rdr.shape[-2]
+                    )
 
                 return self._metadata
             else:
