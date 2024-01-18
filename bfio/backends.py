@@ -1544,9 +1544,8 @@ try:
                         self._rdr = self._root[self.frontend.level]
                     else:
                         raise ValueError(
-                            "The zarr file does not contain resolution level {}.".format(
-                                self.frontend.level
-                            )
+                            "The zarr file does not contain resolution "
+                            + "level {}.".format(self.frontend.level)
                         )
                 else:
                     raise ValueError(
