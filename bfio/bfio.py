@@ -87,6 +87,7 @@ class BioReader(BioBase):
         "clean_metadata",
         "_read_only",
         "_backend",
+        "level",
     ]
 
     def __init__(
@@ -95,6 +96,7 @@ class BioReader(BioBase):
         max_workers: typing.Union[int, None] = None,
         backend: typing.Optional[str] = None,
         clean_metadata: bool = True,
+        level: typing.Union[int, None] = None,
     ) -> None:
         """Initialize the BioReader.
 
@@ -108,12 +110,15 @@ class BioReader(BioBase):
             clean_metadata: Will try to reformat poorly formed OME XML metadata if True.
                 If False, will throw an error if the metadata is poorly formed.
                 *Default is True.*
+            level: For multi-resolution image, specify the resolution level. For other
+                image type, this will be ignored
         """
         # Initialize BioBase
         super(BioReader, self).__init__(file_path, max_workers=max_workers)
 
         self.clean_metadata = clean_metadata
         self.set_backend(backend)
+        self.level = level
         # Ensure backend is supported
         self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
