@@ -644,7 +644,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         ]
 
         num_tile_rows = int(numpy.ceil(self.Y / tile_stride[0]))
-        num_tile_cols = (1024 - xyoffset[1]) // tile_stride[1]
+        num_tile_cols = (self._TILE_SIZE - xyoffset[1]) // tile_stride[1]
         if num_tile_cols == 0:
             num_tile_cols = 1
 

@@ -253,6 +253,15 @@ class TestJavaReader(unittest.TestCase):
         with bfio.BioReader(TEST_DIR.joinpath("0.tif")) as br:
             get_channel_names(br)
 
+    def test_sub_resolution_read(self):
+        """Testing multi-resolution read"""
+        with bfio.BioReader(TEST_DIR.joinpath("Leica-1.scn")) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (4668, 1616, 1, 3))
+        with bfio.BioReader(TEST_DIR.joinpath("Leica-1.scn"), level=1) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (1167, 404, 1, 3))
+
 
 class TestZarrReader(unittest.TestCase):
     def test_get_dims(self):
@@ -275,6 +284,15 @@ class TestZarrReader(unittest.TestCase):
         """Testing metadata channel names"""
         with bfio.BioReader(TEST_DIR.joinpath("4d_array.zarr")) as br:
             get_channel_names(br)
+
+    def test_sub_resolution_read(self):
+        """Testing multi-resolution read"""
+        with bfio.BioReader(TEST_DIR.joinpath("5025551.zarr")) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (2700, 2702, 1, 27))
+        with bfio.BioReader(TEST_DIR.joinpath("5025551.zarr"), level=1) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (1350, 1351, 1, 27))
 
 
 class TestZarrMetadata(unittest.TestCase):
