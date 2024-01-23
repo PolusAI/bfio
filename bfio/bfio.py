@@ -87,6 +87,7 @@ class BioReader(BioBase):
         "clean_metadata",
         "_read_only",
         "_backend",
+        "level",
     ]
 
     def __init__(
@@ -95,6 +96,7 @@ class BioReader(BioBase):
         max_workers: typing.Union[int, None] = None,
         backend: typing.Optional[str] = None,
         clean_metadata: bool = True,
+        level: typing.Union[int, None] = None,
     ) -> None:
         """Initialize the BioReader.
 
@@ -108,12 +110,15 @@ class BioReader(BioBase):
             clean_metadata: Will try to reformat poorly formed OME XML metadata if True.
                 If False, will throw an error if the metadata is poorly formed.
                 *Default is True.*
+            level: For multi-resolution image, specify the resolution level. For other
+                image type, this will be ignored
         """
         # Initialize BioBase
         super(BioReader, self).__init__(file_path, max_workers=max_workers)
 
         self.clean_metadata = clean_metadata
         self.set_backend(backend)
+        self.level = level
         # Ensure backend is supported
         self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
@@ -573,9 +578,9 @@ class BioReader(BioBase):
         """
         self._buffer_supertile(X[0][0], X[0][1])
 
-        if X[-1][0] - self._tile_x_offset > 1024:
+        if X[-1][0] - self._tile_x_offset > self._TILE_SIZE:
             split_ind = 0
-            while X[split_ind][0] - self._tile_x_offset < 1024:
+            while X[split_ind][0] - self._tile_x_offset < self._TILE_SIZE:
                 split_ind += 1
         else:
             split_ind = len(X)
@@ -723,12 +728,15 @@ class BioReader(BioBase):
             )
 
         # determine supertile sizes
-        y_tile_dim = int(numpy.ceil((self.Y - 1) / 1024))
+        y_tile_dim = int(numpy.ceil((self.Y - 1) / self._TILE_SIZE))
         x_tile_dim = 1
 
         # Initialize the pixel buffer
         self._pixel_buffer = numpy.zeros(
-            (y_tile_dim * 1024 + tile_size[0], 2 * x_tile_dim * 1024 + tile_size[1]),
+            (
+                y_tile_dim * self._TILE_SIZE + tile_size[0],
+                2 * x_tile_dim * self._TILE_SIZE + tile_size[1],
+            ),
             dtype=self.dtype,
         )
         self._tile_x_offset = -xypad[1][0]
@@ -736,14 +744,14 @@ class BioReader(BioBase):
 
         # Generate the supertile loading order
         tiles = []
-        y_tile_list = list(range(0, self.Y + xypad[0][1], 1024 * y_tile_dim))
-        if y_tile_list[-1] != 1024 * y_tile_dim:
-            y_tile_list.append(1024 * y_tile_dim)
+        y_tile_list = list(range(0, self.Y + xypad[0][1], self._TILE_SIZE * y_tile_dim))
+        if y_tile_list[-1] != self._TILE_SIZE * y_tile_dim:
+            y_tile_list.append(self._TILE_SIZE * y_tile_dim)
         if y_tile_list[0] != xypad[0][0]:
             y_tile_list[0] = -xypad[0][0]
-        x_tile_list = list(range(0, self.X + xypad[1][1], 1024 * x_tile_dim))
+        x_tile_list = list(range(0, self.X + xypad[1][1], self._TILE_SIZE * x_tile_dim))
         if x_tile_list[-1] < self.X + xypad[1][1]:
-            x_tile_list.append(x_tile_list[-1] + 1024)
+            x_tile_list.append(x_tile_list[-1] + self._TILE_SIZE)
         if x_tile_list[0] != xypad[1][0]:
             x_tile_list[0] = -xypad[1][0]
         for yi in range(len(y_tile_list) - 1):

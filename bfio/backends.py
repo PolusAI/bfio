@@ -374,13 +374,35 @@ class PythonReader(bfio.base_classes.AbstractReader):
         width = self._metadata.images[0].pixels.size_x
         height = self._metadata.images[0].pixels.size_y
 
-        for tag in self._rdr.pages[0].tags:
+        self._rdr_pages = self._rdr.pages
+        # if level is given try accessing the sub-res image
+        if self.frontend.level is not None:
+            if len(self._rdr.series) != 0:
+                series = self._rdr.series[0]
+                if len(series.levels) <= self.frontend.level:
+                    self.close()
+                    raise ValueError(
+                        "{} does not have a resolution level {}.".format(
+                            self.frontend._file_path.name, self.frontend.level
+                        )
+                    )
+                else:
+                    self.logger.debug(
+                        f"Reading sub-resolution level {self.frontend.level}"
+                    )
+                    self._rdr_pages = series.levels[self.frontend.level]
+                    height = self._rdr_pages[0].shape[0]
+                    width = self._rdr_pages[0].shape[1]
+                    self._metadata.images[0].pixels.size_x = width
+                    self._metadata.images[0].pixels.size_y = height
+
+        for tag in self._rdr_pages[0].tags:
             logger.debug(tag)
 
-        if not self._rdr.pages[0].is_tiled or not self._rdr.pages[0].rowsperstrip:
+        if not self._rdr_pages[0].is_tiled or self._rdr_pages[0].rowsperstrip != 0:
             if (
-                self._rdr.pages[0].tilewidth < self.frontend._TILE_SIZE
-                or self._rdr.pages[0].tilelength < self.frontend._TILE_SIZE
+                self._rdr_pages[0].tilewidth < self.frontend._TILE_SIZE
+                or self._rdr_pages[0].tilelength < self.frontend._TILE_SIZE
             ):
                 self.close()
                 raise TypeError(
@@ -392,8 +414,8 @@ class PythonReader(bfio.base_classes.AbstractReader):
                 )
 
         elif (
-            self._rdr.pages[0].tilewidth != self.frontend._TILE_SIZE
-            or self._rdr.pages[0].tilelength != self.frontend._TILE_SIZE
+            self._rdr_pages[0].tilewidth != self.frontend._TILE_SIZE
+            or self._rdr_pages[0].tilelength != self.frontend._TILE_SIZE
         ):
             if width > frontend._TILE_SIZE or height > frontend._TILE_SIZE:
                 self.close()
@@ -403,7 +425,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
                     )
                     + "using the python backend, but found "
                     + "tilewidth={} and tilelength={}. Use the java ".format(
-                        self._rdr.pages[0].tilewidth, self._rdr.pages[0].tilelength
+                        self._rdr_pages[0].tilewidth, self._rdr_pages[0].tilelength
                     )
                     + "backend to read this image."
                 )
@@ -474,7 +496,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     def _page_offsets_bytes(self, index: int):
         if index == 0:
-            return self._rdr.pages[0].dataoffsets, self._rdr.pages[0].databytecounts
+            return self._rdr_pages[0].dataoffsets, self._rdr_pages[0].databytecounts
         parent = self._rdr
 
         if self._offsets_bytes is None or self._offsets_bytes.get_index() + 1 != index:
@@ -557,10 +579,10 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
     def _read_image(self, X, Y, Z, C, T, output):
         # Get keyframe
-        self._keyframe = self._rdr.pages[0].keyframe
-
+        self._keyframe = self._rdr_pages[0].keyframe
         # Open the file
-        fh = self._rdr.pages[0].parent.filehandle
+        fh = self._rdr_pages[0].parent.filehandle
+        # fh = self._rdr.series[0].levels[0].parent.filehandle
         fh.open()
 
         # Set tile size if request size is < _TILE_SIZE for efficiency
@@ -1221,6 +1243,16 @@ try:
             self._rdr.setOriginalMetadataPopulated(True)
             self._rdr.setMetadataStore(self.omexml)
             self._rdr.setId(JString(str(self.frontend._file_path.absolute())))
+            if self.frontend.level is not None:
+                if self._rdr.getSeriesCount() > self.frontend.level:
+                    self._rdr.setSeries(self.frontend.level)
+                else:
+                    self.close()
+                    raise ValueError(
+                        "{} does not have a resolution level {}.".format(
+                            self.frontend._file_path.name, self.frontend.level
+                        )
+                    )
 
         def read_metadata(self):
             self.logger.debug("read_metadata(): Reading metadata...")
@@ -1229,7 +1261,11 @@ try:
                 self._metadata = ome_types.from_xml(
                     clean_ome_xml_for_known_issues(str(self.omexml.dumpXML()))
                 )
-
+            if (
+                self.frontend.level is not None
+                and len(self._metadata.images) > self.frontend.level
+            ):
+                self._metadata.images = [self._metadata.images[self.frontend.level]]
             return self._metadata
 
         def _read_image(self, X, Y, Z, C, T, output):
@@ -1471,6 +1507,8 @@ try:
             super().__init__(frontend)
 
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
+            self.logger.debug(f"Level is {self.frontend.level}")
+
             try:
                 self._root = zarr.open(
                     str(self.frontend._file_path.resolve()), mode="r"
@@ -1480,19 +1518,41 @@ try:
                 data_zarr_path = str(self.frontend._file_path.resolve()) + "/data.zarr"
                 self._root = zarr.open(data_zarr_path, mode="r")
 
-            if isinstance(self._root, zarr.core.Array):
-                self._rdr = self._root
-            elif isinstance(self._root, zarr.hierarchy.Group):
-                # the top level is a group, check if this has any arrays
-                num_arrays = len(sorted(self._root.array_keys()))
-                if num_arrays > 0:
-                    self._rdr = self._root[next(self._root.array_keys())]
+            if self.frontend.level is None:
+                if isinstance(self._root, zarr.core.Array):
+                    self._rdr = self._root
+                elif isinstance(self._root, zarr.hierarchy.Group):
+                    # the top level is a group, check if this has any arrays
+                    num_arrays = len(sorted(self._root.array_keys()))
+                    if num_arrays > 0:
+                        self._rdr = self._root[next(self._root.array_keys())]
+                    else:
+                        # need to go one more level
+                        self._root = self._root[next(self._root.group_keys())]
+                        self._rdr = self._root[next(self._root.array_keys())]
                 else:
-                    # need to go one more level
-                    self._root = self._root[next(self._root.group_keys())]
-                    self._rdr = self._root[next(self._root.array_keys())]
+                    pass
             else:
-                pass
+                if isinstance(self._root, zarr.core.Array):
+                    self.close()
+                    raise ValueError(
+                        "Level is specified but the zarr file does not contain "
+                        + "multiple resoulutions."
+                    )
+                elif isinstance(self._root, zarr.hierarchy.Group):
+                    if len(sorted(self._root.array_keys())) > self.frontend.level:
+                        self._rdr = self._root[self.frontend.level]
+                    else:
+                        raise ValueError(
+                            "The zarr file does not contain resolution "
+                            + "level {}.".format(self.frontend.level)
+                        )
+                else:
+                    raise ValueError(
+                        "The zarr file does not contain resolution level {}.".format(
+                            self.frontend.level
+                        )
+                    )
 
             self._axes_list = []
 
@@ -1501,8 +1561,11 @@ try:
             if shape_len == 5:
                 self._axes_list = ["t", "c", "z", "y", "x"]
             else:
+                data_key = 0
+                if self.frontend.level is not None:
+                    data_key = self.frontend.level
                 try:
-                    axes_metadata = self._root.attrs["multiscales"][0]["axes"]
+                    axes_metadata = self._root.attrs["multiscales"][data_key]["axes"]
                     for axes in axes_metadata:
                         self._axes_list.append(axes["name"])
                 except AttributeError or KeyError:
@@ -1538,6 +1601,10 @@ try:
                             )
                         else:
                             raise
+
+                if self.frontend.level is not None:
+                    self._metadata.images[0].pixels.size_x = self._rdr.shape[-1]
+                    self._metadata.images[0].pixels.size_y = self._rdr.shape[-2]
 
                 return self._metadata
             else:
