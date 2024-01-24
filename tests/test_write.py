@@ -88,15 +88,14 @@ class TestOmeTiffWrite(unittest.TestCase):
 
         assert np.array_equal(image[..., 0], reconstructed)
 
-    @unittest.expectedFailure
     def test_write_channels_python(self):
-        # Cannot write an image with channel information using python backend
 
         with bfio.BioWriter("4d_array.ome.tif") as bw:
             image = np.load(TEST_DIR.joinpath("4d_array.npy"))
 
             bw.shape = image.shape
             bw.dtype = image.dtype
+            bw[:] = image[:]
 
     @unittest.skipIf(sys.platform.startswith("darwin"), "Does not work in Mac")
     def test_write_java(self):

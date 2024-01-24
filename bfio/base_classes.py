@@ -341,11 +341,6 @@ class BioBase(object, metaclass=abc.ABCMeta):
     def shape(self, new_shape: typing.Tuple[int, int, int, int, int]):
         assert not self._read_only, self._READ_ONLY_MESSAGE.format("cnames")
         for s, d in zip(new_shape, "yxzct"):
-            if d in "ct" and self._backend_name == "python" and s > 1:
-                raise ValueError(
-                    "The BioWriter with 'python' backend can only write "
-                    + "1 timeslice/channel images."
-                )
             setattr(self, d, s)
 
     @property
