@@ -30,10 +30,7 @@ try:
         """
 
         global JAR_VERSION
-        if system() == "Darwin" and processor() == "arm":
-            scyjava.config.endpoints.append("ome:formats-gpl:7.0.0")
-        else:
-            scyjava.config.endpoints.append("ome:formats-gpl:7.0.1")
+        scyjava.config.endpoints.append("ome:formats-gpl:7.1.0")
         scyjava.start_jvm()
         loci = jpype.JPackage("loci")
         loci.common.DebugTools.setRootLevel("ERROR")
