@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-import requests, io, pathlib, shutil, logging, sys
+import requests, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 from ome_zarr.utils import download as zarr_download
@@ -37,6 +37,8 @@ def setUpModule():
             with open(TEST_DIR.joinpath(file), "wb") as fw:
                 fw.write(r.content)
         else:
+            if TEST_DIR.joinpath(file).exists():
+                shutil.rmtree(TEST_DIR.joinpath(file))
             zarr_download(url, str(TEST_DIR))
 
 

@@ -1,6 +1,6 @@
 __pycache__
 .vscode
-.venv
+venv
 docs/build
 dist
 build

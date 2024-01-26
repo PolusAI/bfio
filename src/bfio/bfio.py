@@ -5,17 +5,15 @@ import struct
 import typing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from platform import processor, system
 
 import numpy
 import ome_types
 import tifffile
+import jpype
+import scyjava
 
 from bfio import backends
 from bfio.base_classes import BioBase
-
-import jpype
-import scyjava
 
 try:
 
