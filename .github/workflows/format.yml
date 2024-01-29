@@ -20,4 +20,4 @@ jobs:
       - uses: psf/black@stable
         with:
           options: "--check --color --verbose"
-          src: "./bfio"
+          src: "./src"
