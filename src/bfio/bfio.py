@@ -1004,9 +1004,9 @@ class BioWriter(BioBase):
             self._metadata = metadata.model_copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
-            self._metadata.images[
-                0
-            ].pixels.dimension_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+            self._metadata.images[0].pixels.dimension_order = (
+                ome_types.model.Pixels_DimensionOrder.XYZCT
+            )
         else:
             self._metadata = self._minimal_xml()
 

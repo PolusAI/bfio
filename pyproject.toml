@@ -81,7 +81,7 @@ namespaces = false
 ]
 
 
-[bump]
+[tool.bumpversion]
 current_version = "2.3.3"
 commit = true
 tag = true
@@ -92,7 +92,7 @@ serialize = [
     "{major}.{minor}.{patch}"
 ]
 
-[bump.part.release]
+[tool.bumpversion.parts.release]
 optional_value = "_"
 first_value = "dev"
 values = [
@@ -100,16 +100,18 @@ values = [
     "_"
 ]
 
-[bump.part.build]
+[[tool.bumpversion.files]]
+filename = "src/bfio/VERSION"
+search = "{current_version}"
+replace = "{new_version}"
 
-[bump.file]
-VERSION = {}
-
-[bump.file.requirements/requirements-base.txt]
+[[tool.bumpversion.files]]
+filename = "requirements/requirements-base.txt"
 search = "bfio[all]=={current_version}"
 replace = "bfio[all]=={new_version}"
 
-[bump.file.README.md]
+[[tool.bumpversion.files]]
+filename = "README.md"
 search = "{current_version}"
 replace = "{new_version}"
 
