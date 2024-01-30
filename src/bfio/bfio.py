@@ -5,17 +5,15 @@ import struct
 import typing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from platform import processor, system
 
 import numpy
 import ome_types
 import tifffile
+import jpype
+import scyjava
 
 from bfio import backends
 from bfio.base_classes import BioBase
-
-import jpype
-import scyjava
 
 try:
 
@@ -30,10 +28,7 @@ try:
         """
 
         global JAR_VERSION
-        if system() == "Darwin" and processor() == "arm":
-            scyjava.config.endpoints.append("ome:formats-gpl:7.0.0")
-        else:
-            scyjava.config.endpoints.append("ome:formats-gpl:7.0.1")
+        scyjava.config.endpoints.append("ome:formats-gpl:7.1.0")
         scyjava.start_jvm()
         loci = jpype.JPackage("loci")
         loci.common.DebugTools.setRootLevel("ERROR")
@@ -1009,9 +1004,9 @@ class BioWriter(BioBase):
             self._metadata = metadata.model_copy(deep=True)
 
             self._metadata.images[0].name = self._file_path.name
-            self._metadata.images[
-                0
-            ].pixels.dimension_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+            self._metadata.images[0].pixels.dimension_order = (
+                ome_types.model.Pixels_DimensionOrder.XYZCT
+            )
         else:
             self._metadata = self._minimal_xml()
 

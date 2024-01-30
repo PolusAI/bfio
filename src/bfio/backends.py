@@ -937,9 +937,9 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         self._tags = []
 
-        self.frontend._metadata.images[
-            0
-        ].id = f"Image:{Path(self.frontend._file_path).name}"
+        self.frontend._metadata.images[0].id = (
+            f"Image:{Path(self.frontend._file_path).name}"
+        )
 
         if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
             big_tiff = True

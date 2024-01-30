@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-import requests, io, pathlib, shutil, logging, sys
+import requests, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 import random
@@ -43,6 +43,8 @@ def setUpModule():
             with open(TEST_DIR.joinpath(file), "wb") as fw:
                 fw.write(r.content)
         else:
+            if TEST_DIR.joinpath(file).exists():
+                shutil.rmtree(TEST_DIR.joinpath(file))
             zarr_download(url, str(TEST_DIR))
 
     """Load the czi image, and save as a npy file for further testing."""

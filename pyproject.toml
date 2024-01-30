@@ -1,0 +1,123 @@
+[build-system]
+ # Run dependencies are also considered as build dependencies
+ # due to cascading import situation in src/bfio/__init__.py
+requires = [
+  "setuptools", 
+  "wheel",
+  "imagecodecs>=2021.2.26",
+  "numpy",
+  "ome-types>=0.4.2",
+  "zarr>=2.6.1",
+  "scyjava",
+  "jpype1",
+  "tifffile>=2022.8.12"
+]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "bfio"
+dynamic = ["version"]
+dependencies = [
+    "imagecodecs>=2021.2.26",
+    "numpy",
+    "ome-types>=0.4.2",
+    "zarr>=2.6.1",
+    "scyjava",
+    "jpype1",
+    "tifffile>=2022.8.12"
+]
+
+description = "Simple reading and writing classes for tiled tiffs using Bioformats."
+readme = "README.md"
+license = {file = "LICENSE"}
+
+authors = [
+  {name = "Nick Schaub", email = "nick.schaub@nih.gov"},
+  {name = "Sameeul Bashir Samee", email = "sameeul.samee@axleinfo.com"},
+]
+
+maintainers = [
+  {name = "Sameeul Bashir Samee", email = "sameeul.samee@axleinfo.com"},
+]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+] 
+
+requires-python = ">=3.8"
+
+
+[project.optional-dependencies]
+dev = [
+    "ome_zarr",
+    "requests>=2.26.0"
+]
+
+
+[project.urls]
+Documentation = "https://bfio.readthedocs.io/en/latest/"
+Repository = "https://github.com/PolusAI/bfio"
+
+
+[tool.setuptools.dynamic]
+version = {attr = "bfio.__version__"}
+
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+namespaces = false
+
+
+[tool.setuptools.package-data]
+"*" = [
+    "VERSION"
+]
+
+
+[tool.bumpversion]
+current_version = "2.3.3"
+commit = true
+tag = true
+commit_args = "--no-verify"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)(\\-(?P<release>[a-z]+)(?P<build>\\d+))?"
+serialize = [
+    "{major}.{minor}.{patch}-{release}{build}",
+    "{major}.{minor}.{patch}"
+]
+
+[tool.bumpversion.parts.release]
+optional_value = "_"
+first_value = "dev"
+values = [
+    "dev",
+    "_"
+]
+
+[[tool.bumpversion.files]]
+filename = "src/bfio/VERSION"
+search = "{current_version}"
+replace = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "requirements/requirements-base.txt"
+search = "bfio[all]=={current_version}"
+replace = "bfio[all]=={new_version}"
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "{current_version}"
+replace = "{new_version}"
+
+
+[tool.codespell]
+skip = "*.svg,*.html"
+ignore-words-list = "utput"
