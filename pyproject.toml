@@ -1,4 +1,6 @@
 [build-system]
+ # Run dependencies are also considered as build dependencies
+ # due to cascading import situation in src/bfio/__init__.py
 requires = [
   "setuptools", 
   "wheel",
