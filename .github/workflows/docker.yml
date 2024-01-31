@@ -19,7 +19,7 @@ jobs:
         uses: docker/setup-buildx-action@v1
 
       - id: get_version
-        run: echo "::set-output name=version::$(<VERSION)"
+        run: echo "::set-output name=version::$(<./src/bfio/VERSION)"
 
       - run: echo ${{ steps.get_version.outputs.version }}
 
