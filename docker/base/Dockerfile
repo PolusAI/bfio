@@ -11,7 +11,7 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}} && \
+    mkdir ${DATA_DIR} && \
     mkdir /bfio_src
 
 # Install Python
@@ -33,4 +33,15 @@ COPY . /bfio_src
 RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
 
+# create polusai user, gid and uid are used to conform with cwl runner
+RUN groupadd -g 1000 polusai
+RUN useradd -u 1000 --no-log-init -r -m -g polusai polusai
+RUN usermod -aG sudo polusai
+ENV HOME=/home/polusai
+RUN chown -R polusai ${EXEC_DIR} && \
+    chown -R polusai ${DATA_DIR} && \
+    chmod -R u+rwx ${EXEC_DIR} && \
+    chmod -R u+rwx ${DATA_DIR}
+
+USER polusai
 RUN python3 -c 'import bfio; bfio.start()'
