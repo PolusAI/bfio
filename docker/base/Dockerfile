@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 # Polus platform file extension
 ENV POLUS_EXT=".ome.tif"
@@ -11,20 +11,17 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}} && \
+    mkdir ${DATA_DIR} && \
     mkdir /bfio_src
 
 # Install Python
 RUN apt update && \
     apt install software-properties-common -y && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt install python3.9 python3.9-distutils curl maven openjdk-8-jre -y && \
+    apt install curl maven openjdk-8-jre -y && \
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python3.9 get-pip.py && \
+    python3 get-pip.py && \
     apt autoremove -y && \
     rm -rf /var/lib/apt/lists/*
-
-RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
 # Copy the source
 COPY . /bfio_src
@@ -33,4 +30,16 @@ COPY . /bfio_src
 RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
 
+# create polusai user, gid and uid are used to conform with cwl runner
+RUN groupadd -g 1000 polusai && \
+    useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
+    usermod -aG sudo polusai
+
+ENV HOME=/home/polusai
+RUN chown -R polusai ${EXEC_DIR} && \
+    chown -R polusai ${DATA_DIR} && \
+    chmod -R u+rwx ${EXEC_DIR} && \
+    chmod -R u+rwx ${DATA_DIR}
+
+USER polusai
 RUN python3 -c 'import bfio; bfio.start()'

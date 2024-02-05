@@ -9,7 +9,6 @@ from pathlib import Path
 import numpy
 import ome_types
 import tifffile
-import jpype
 import scyjava
 
 from bfio import backends
@@ -30,7 +29,8 @@ try:
         global JAR_VERSION
         scyjava.config.endpoints.append("ome:formats-gpl:7.1.0")
         scyjava.start_jvm()
-        loci = jpype.JPackage("loci")
+        import loci
+
         loci.common.DebugTools.setRootLevel("ERROR")
         JAR_VERSION = loci.formats.FormatTools.VERSION
 

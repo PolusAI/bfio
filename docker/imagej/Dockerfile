@@ -36,8 +36,19 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}}
+    mkdir ${DATA_DIR}
 
+# create polusai user, gid and uid are used to conform with cwl runner
+RUN groupadd -g 1000 polusai && \
+    useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
+    usermod -aG sudo polusai
+    
+ENV HOME=/home/polusai
+RUN chown -R polusai ${EXEC_DIR} && \
+    chown -R polusai ${DATA_DIR} && \
+    chmod -R u+rwx ${EXEC_DIR} && \
+    chmod -R u+rwx ${DATA_DIR}
+
+USER polusai
+RUN python3 -c 'import bfio; bfio.start()'
 RUN python3 -c 'import imagej; ij = imagej.init(); print(ij.getVersion())'
-
-RUN rm -rf ~/.m2
