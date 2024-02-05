@@ -19,7 +19,7 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}}
+    mkdir ${DATA_DIR}
 
 RUN pip3 install --upgrade pip --no-cache-dir
 

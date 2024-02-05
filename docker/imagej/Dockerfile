@@ -36,7 +36,7 @@ ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
 RUN mkdir ${EXEC_DIR} && \
-    mkdir ${DATA_DIR}}
+    mkdir ${DATA_DIR}
 
 # create polusai user, gid and uid are used to conform with cwl runner
 RUN groupadd -g 1000 polusai && \
