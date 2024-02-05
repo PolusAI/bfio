@@ -34,9 +34,10 @@ RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
 
 # create polusai user, gid and uid are used to conform with cwl runner
-RUN groupadd -g 1000 polusai
-RUN useradd -u 1000 --no-log-init -r -m -g polusai polusai
-RUN usermod -aG sudo polusai
+RUN groupadd -g 1000 polusai && \
+    useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
+    usermod -aG sudo polusai
+    
 ENV HOME=/home/polusai
 RUN chown -R polusai ${EXEC_DIR} && \
     chown -R polusai ${DATA_DIR} && \
