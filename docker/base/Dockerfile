@@ -1,4 +1,4 @@
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 # Polus platform file extension
 ENV POLUS_EXT=".ome.tif"
@@ -17,14 +17,11 @@ RUN mkdir ${EXEC_DIR} && \
 # Install Python
 RUN apt update && \
     apt install software-properties-common -y && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt install python3.9 python3.9-distutils curl maven openjdk-8-jre -y && \
+    apt install curl maven openjdk-8-jre -y && \
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python3.9 get-pip.py && \
+    python3 get-pip.py && \
     apt autoremove -y && \
     rm -rf /var/lib/apt/lists/*
-
-RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
 # Copy the source
 COPY . /bfio_src
@@ -37,7 +34,7 @@ RUN pip3 install /bfio_src --no-cache-dir && \
 RUN groupadd -g 1000 polusai && \
     useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
     usermod -aG sudo polusai
-    
+
 ENV HOME=/home/polusai
 RUN chown -R polusai ${EXEC_DIR} && \
     chown -R polusai ${DATA_DIR} && \
