@@ -8,7 +8,7 @@ bfio.BioReader
     :inherited-members:
 
     .. py:method:: X
-        :property:
+        py:property::
 
         :setter: X is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
@@ -16,7 +16,7 @@ bfio.BioReader
         :type: :attr:`int`
 
     .. py:method:: Y
-        :property:
+        py:property::
 
         :setter: Y is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
@@ -24,7 +24,7 @@ bfio.BioReader
         :type: :attr:`int`
 
     .. py:method:: Z
-        :property:
+        py:property::
 
         :setter: Z is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
@@ -32,7 +32,7 @@ bfio.BioReader
         :type: :attr:`int`
 
     .. py:method:: C
-        :property:
+        py:property::
 
         :setter: C is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`
@@ -40,7 +40,7 @@ bfio.BioReader
         :type: :attr:`int`
 
     .. py:method:: T
-        :property:
+        py:property::
 
         :setter: T is :attr:`~bfio.bfio.BioReader.read_only` in
             :class:`~bfio.bfio.BioReader`

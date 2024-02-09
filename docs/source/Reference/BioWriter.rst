@@ -8,35 +8,35 @@ bfio.BioWriter
     :inherited-members:
 
     .. py:method:: X
-        :property:
+        py:property::
 
         :setter: Set the number of pixels in the x-dimension (width)
         :getter: Number of pixels in the x-dimension (width)
         :type: :attr:`int`
 
     .. py:method:: Y
-        :property:
+        py:property::
 
         :setter: Set the number of pixels in the y-dimension (height)
         :getter: Number of pixels in the y-dimension (height)
         :type: :attr:`int`
 
     .. py:method:: Z
-        :property:
+        py:property::
 
         :setter: Set the number of pixels in the z-dimension (depth)
         :getter: Number of pixels in the z-dimension (depth)
         :type: :attr:`int`
 
     .. py:method:: C
-        :property:
+        py:property::
 
         :setter: Set the number of pixels in the c-dimension
         :getter: Number of pixels in the c-dimension
         :type: :attr:`int`
 
     .. py:method:: T
-        :property:
+        py:property::
 
         :setter: Set the number of pixels in the t-dimension
         :getter: Number of pixels in the t-dimension
