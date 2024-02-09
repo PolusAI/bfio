@@ -1,0 +1,12 @@
+channels:
+  - conda-forge
+  - https://repo.continuum.io/pkgs/free
+  - defaults
+dependencies:
+  - python=3.8
+  - pip:
+    - sphinx
+    - sphinx_rtd_theme
+    - autodocsumm
+    - sphinx-autodoc-typehints
+    - sphinx_rtd_theme==1.0.0
