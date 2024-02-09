@@ -30,12 +30,21 @@ COPY . /bfio_src
 RUN pip3 install /bfio_src --no-cache-dir && \
     rm -rf /bfio_src
 
-# create polusai user, gid and uid are used to conform with cwl runner
-RUN groupadd -g 1000 polusai && \
-    useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
+# create a non-root user named polusai
+RUN groupadd polusai && \
+    useradd --no-log-init -r -m -g polusai polusai && \
     usermod -aG sudo polusai
 
 ENV HOME=/home/polusai
+RUN chmod -R o+rx ${HOME}
+# NOTE: By default, CWL adds --user=... to the docker run commands.
+# https://github.com/common-workflow-language/cwltool/blob/7b8f174828e3c07b3067e4f88568124f7c878d2d/cwltool/docker.py#L362-L366
+# Since we do not control the userid and/or groupid on the
+# host machine(s) where this docker image will be executed,
+# we must make HOME readable and executable for all users! Otherwise:
+# /usr/bin/python3: Error while finding module specification for 'polus.plugins...'
+# (ModuleNotFoundError: No module named 'polus')
+
 RUN chown -R polusai ${EXEC_DIR} && \
     chown -R polusai ${DATA_DIR} && \
     chmod -R u+rwx ${EXEC_DIR} && \
