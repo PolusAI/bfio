@@ -25,7 +25,7 @@ project = "bfio"
 author = "Nicholas J Schaub"
 
 # The full version, including alpha/beta/rc tags
-with open(str(Path(__file__).parent.parent.parent.joinpath("VERSION")), "r") as fr:
+with open(str(Path(__file__).parent.parent.parent.joinpath("src/bfio/VERSION")), "r") as fr:
     release = fr.readline()
 
 # -- General configuration ---------------------------------------------------
