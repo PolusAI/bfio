@@ -523,7 +523,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert not self._read_only, self._READ_ONLY_MESSAGE.format("dtype")
         if dtype in [numpy.uint64, numpy.int64]:
             self.logger.warning(
-                f"{dtype} is not supported by Bioformats, saving as numpy.float64."
+                f"{dtype} is not supported by Bio-Formats, saving as numpy.float64."
             )
             dtype = numpy.float64
         assert dtype in self._DTYPE.values(), "Invalid data type."
@@ -576,10 +576,10 @@ class BioBase(object, metaclass=abc.ABCMeta):
     def metadata(self) -> ome_types.model.OME:
         """Get the metadata for the image.
 
-        This function calls the Bioformats metadata parser, which extracts
+        This function calls the Bio-Formats metadata parser, which extracts
         metadata from an image. This returns a reference to an OMEXML class,
         which is a convenient handler for the complex xml metadata created by
-        Bioformats.
+        Bio-Formats.
 
         Most basic metadata information have their own BioReader methods, such
         as image dimensions(i.e. x, y, etc). However, in some cases it may be

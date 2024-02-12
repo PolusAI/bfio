@@ -20,7 +20,7 @@ try:
         """Start the jvm.
 
         This function starts the jvm and imports all the necessary Java classes
-        to read images using the Bioformats toolbox.
+        to read images using the Bio-Formats toolbox.
 
         Return:
             The Bio-Formats JAR version.
@@ -47,10 +47,10 @@ except ModuleNotFoundError:
 
 
 class BioReader(BioBase):
-    """Read supported image formats using Bioformats.
+    """Read supported image formats using Bio-Formats.
 
     This class handles file reading of multiple formats. It can read files from
-    any Bioformats supported file format, but is specially optimized for
+    any Bio-Formats supported file format, but is specially optimized for
     handling the OME tiled tiff format.
 
     There are three backends: ``bioformats``, ``python``, and ``zarr``. The
@@ -65,7 +65,7 @@ class BioReader(BioBase):
     available CPUs detected by multiprocessing.cpu_count() are used to read
     an image.
 
-    For for information, visit the Bioformats page:
+    For for information, visit the Bio-Formats page:
     https://www.openmicroscopy.org/bio-formats/
 
     Note:
@@ -952,14 +952,14 @@ class BioWriter(BioBase):
     """BioWriter Write OME tiled tiff images.
 
     This class handles the writing OME tiled tif images. There is a Java backend
-    version of this tool that directly interacts with the Bioformats java
+    version of this tool that directly interacts with the Bio-Formats java
     library directly, and is primarily used for testing. It is currently not
     possible to change the tile size (which is set to 1024x1024).
 
     Unlike the BioReader class, the properties of this class are settable until
     the first time the ``write`` method is called.
 
-    For for information, visit the Bioformats page:
+    For for information, visit the Bio-Formats page:
     https://www.openmicroscopy.org/bio-formats/
 
     Note:

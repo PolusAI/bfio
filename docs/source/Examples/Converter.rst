@@ -10,24 +10,25 @@ The bfio package is designed to make it easy to process arbitrarily sized images
 in a fast, scalable way. The two core classes, :doc:`/Reference/BioReader` and
 :doc:`/Reference/BioWriter`, can use one of three different backends depending
 on the file type that will be read. Usually, the proper backend will be selected
-when opening a file, but periodically it will not select the proper backend so
-it is useful to mention them here:
+when opening a file. For cases where bfio fails to select the proper backend, the 
+``backend`` parameter can be passed to the constructor. The following backends
+are available in ``bfio``.
 
 1. ``backend="python"`` can only be used to read/write OME tiled tiff images.
    Tiled tiff is the preferred file format for reading/writing arbitrarily sized
    images.
 2. ``backend="bioformats"`` can be used to read any
-   `any format supported by Bioformats <https://docs.openmicroscopy.org/bio-formats/6.1.0/supported-formats.html>`_.
+   `any format supported by Bio-Formats <https://docs.openmicroscopy.org/bio-formats/7.2.0/supported-formats.html>`_.
    The BioWriter with java backend will only save images as OME tiled tiff.
 3. ``backend="zarr"`` can be used to read/write a subset of Zarr files following
-   the `OME Zarr spec. <https://ngff.openmicroscopy.org/latest/>`_.
+   the `OME Zarr spec <https://ngff.openmicroscopy.org/latest/>`_.
 
 The advantage to using the ``python`` and ``zarr`` backends are speed and
 scalability at the expense of a rigid file structure, while the ``bioformats`` backend
 provides broad access to a wide array of file types but is considerably slower.
 
 In this example, the basic usage of two core classes are demonstrated by
-creating a "universal" converter from any Bioformats supported file format to
+creating a "universal" converter from any Bio-Formats supported file format to
 OME tiled tiff.
 
 ---------------
@@ -38,19 +39,18 @@ Getting Started
 Install Dependencies
 ~~~~~~~~~~~~~~~~~~~~
 
-To run this example, a few dependencies are required. First, ensure Java is
-installed. Then install ``bfio`` using:
+To run this example, Java and Maven are required. See the :doc:`/Installation` instruction for details on how to install them. Then install ``bfio`` using:
 
-``pip install bfio['bioformats']``
+``pip install bfio``
 
 .. note::
 
-    JPype and Bioformats require Java 8 or later. ``bfio`` has been tested
+    JPype and Bio-Formats require Java 8 or later. ``bfio`` has been tested
     using Java 8.
 
 .. note::
 
-    Bioformats is licensed under GPL. If you plan to package ``bfio`` using this option,
+    Bio-Formats is licensed under GPL. If you plan to package ``bfio`` using this option,
     make sure to consider the licensing ramifications.
 
 ~~~~~~~~~~~~~~~~~~~~~
@@ -83,10 +83,7 @@ Reading Images with the BioReader
 
 The first step in loading an image with the BioReader is to initialize a
 BioReader object. The BioReader tries to predict what backend to use based on
-the file extension, and it will throw an error if it predicts incorrectly. In
-this case, the test file downloaded from the WIPP repository is not in OME tiled
-tiff format even though it has the ``.ome.tif`` extension, meaning it will try
-to use the Python backend:
+the file extension, and it will throw an error if it predicts incorrectly. 
 
 .. code-block:: python
 
@@ -94,18 +91,13 @@ to use the Python backend:
 
     br = BioReader(PATH / FILENAME)
 
-The output should be something like this::
 
-    TypeError: img_r001_c001.ome.tif is not a tiled tiff. The python backend of
-    the BioReader only supports OME tiled tiffs. Use the bioformats backend to load
-    this image.
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Manually Specifying a Backend
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Following the error message above, we need to use the ``bioformats`` backend. To do
-this, just use the keyword argument ``backend=bioformats`` when initializing the
+The user can also manually specify a backend. To use ``bioformats`` backend, just use the keyword argument ``backend=bioformats`` when initializing the
 BioReader.
 
 .. code-block:: python
@@ -119,8 +111,8 @@ BioReader.
 
     br.close()
 
-Behind the scenes, what happens is that JPype starts Java and loads the
-Bioformats jar. If Java is not installed, the above code will raise an error.
+Behind the scenes, what happens is that ``scyjava`` starts Java and loads the
+Bio-Formats jar. If Java is not installed, the above code will raise an error.
 
 .. Note::
 

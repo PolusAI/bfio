@@ -28,7 +28,7 @@ dependencies = [
     "tifffile>=2022.8.12"
 ]
 
-description = "Simple reading and writing classes for tiled tiffs using Bioformats."
+description = "Simple reading and writing classes for tiled tiffs using Bio-Formats."
 readme = "README.md"
 license = {file = "LICENSE"}
 

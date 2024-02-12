@@ -1346,7 +1346,7 @@ try:
     class JavaWriter(bfio.base_classes.AbstractWriter):
         logger = logging.getLogger("bfio.backends.JavaWriter")
 
-        # For Bioformats, the first tile has to be written before any other tile
+        # For Bio-Formats, the first tile has to be written before any other tile
         first_tile = False
 
         _classes_loaded = False

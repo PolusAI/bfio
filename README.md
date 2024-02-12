@@ -8,7 +8,7 @@
 ![Bower](https://img.shields.io/bower/l/MI)
 
 This tool is a simplified but powerful interface to
-[Bioformats](https://www.openmicroscopy.org/bio-formats/)
+[Bio-Formats](https://www.openmicroscopy.org/bio-formats/)
 using jpype for direct access to the library. This tool is designed with
 scalable image analysis in mind, with a simple interface to treat any image
 like a memory mapped array.
@@ -32,10 +32,10 @@ Docker containers with all necessary components are available (see
 ### Setting up Java
 
 **Note:** `bfio` can be used without Java, but only the `python` and `zarr`
-backends will be usable. Only files in tiled OME Tiff or OME Zarr format can be
+backends will be usable. This means only files in tiled OME Tiff or OME Zarr format can be
 read/written.
 
-In order to use the `Java` backend, it is necessary to first install the JDK and Maven.
+In order to use the `bioformats` backend, it is necessary to first install the JDK and Maven.
 The `bfio` package is generally tested with
 [JDK 8](https://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html),
 but JDK 11 and later also appear to work.
@@ -82,11 +82,6 @@ Sameeul B Samee (sameeul.samee@axleinfo.com)
 
 This project is licensed under the [MIT License](LICENSE)
 Creative Commons License - see the [LICENSE](LICENSE) file for details.
-
-**NOTE**
-
-Bioformats is licensed under GPL, and as a consequence so is the `bioformats_jar`
-package. These packages and libraries are installed when using the `bfio[bioformats]` option.
 
 ## Acknowledgments
 
