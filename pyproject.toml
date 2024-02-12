@@ -109,8 +109,8 @@ replace = "{new_version}"
 
 [[tool.bumpversion.files]]
 filename = "requirements/requirements-base.txt"
-search = "bfio[all]=={current_version}"
-replace = "bfio[all]=={new_version}"
+search = "bfio=={current_version}"
+replace = "bfio=={new_version}"
 
 [[tool.bumpversion.files]]
 filename = "README.md"
