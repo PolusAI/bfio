@@ -1,7 +1,8 @@
 FROM ubuntu:jammy
 
 # Polus platform file extension
-ENV POLUS_EXT=".ome.tif"
+ENV POLUS_IMG_EXT=".ome.tif"
+ENV POLUS_TAB_EXT=".csv"
 
 # Container log level
 ENV POLUS_LOG="INFO"
@@ -17,7 +18,7 @@ RUN mkdir ${EXEC_DIR} && \
 # Install Python
 RUN apt update && \
     apt install software-properties-common -y && \
-    apt install curl maven openjdk-8-jre -y && \
+    apt install curl git maven openjdk-8-jre -y && \
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
     python3 get-pip.py && \
     apt autoremove -y && \
