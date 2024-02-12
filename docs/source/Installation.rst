@@ -1,39 +1,29 @@
 Install
 =======
 
-The ``bfio`` package can be installed with a variety of options designed in
-consideration of containerization.
-
-Base Package
-------------
-
-The base package can only read/write tiled, OME TIFF images. It can be installed using:
+The ``bfio`` package and the core dependencies (``numpy``, ``tifffile``, ``imagecodecs``, ``scyjava``) can
+be installed using pip:
 
 ``pip install bfio``
 
-To install all reading and writing options, install with all dependencies:
 
-``pip install bfio[all]``
+A conda distribution is also available in the conda-forge channel. To install it in conda environment, use this:
 
-NOTE: See the Java and Bioformats note about licensing considerations when installing
-using the ``bfio[all]`` option.
+``conda install bfio -c conda-forge``
 
-Java and Bioformats
+Java and Bio-Formats
 -------------------
+``bfio`` can be used without Java, but only the ``python`` and ``zarr``
+backends will be usable. This means only files in tiled OME Tiff or OME Zarr format can be
+read/written.
 
-To use Bioformats, it is necessary to install Java 8 or later. Once Java is
-installed, ``bfio`` can be installed with support for Java using:
+In order to use the ``bioformats`` backend, it is necessary to first install the JDK and Maven.
+The ``bfio`` package is generally tested with
+`JDK 8 <https://docs.oracle.com/javase/8/docs/technotes/guides/install/install_overview.html>`_,
+but JDK 11 and later also appear to work.
+Here are some info on installing Maven on various OS (`Windows <https://phoenixnap.com/kb/install-maven-windows>`_ | `Linux <https://www.digitalocean.com/community/tutorials/install-maven-linux-ubuntu>`_ | `Mac <https://www.digitalocean.com/community/tutorials/install-maven-mac-os>`_).
 
-pip install bfio['bioformats']
 
-NOTE: The ``bioformats_jar`` package and BioFormats are licensed under GPL, while ``bfio``
-is licensed under MIT. This may have consequences when packaging any software that uses
-``bfio`` as a dependency when this option is used.
 
-Zarr
-----
-
-To use the zarr backend, you need to have Zarr already installed, or you can
-install it when installing bfio using:
-
-pip install bfio['zarr']
+NOTE: ``Bio-Formats`` is licensed under GPL, while ``bfio`` is licensed under MIT. This may have consequences when packaging any software that uses
+``bfio`` as a dependency. During the first invocation of ``bfio``, ``scyjava`` will try to download ``Bio-Formats`` package from the Maven repository. The current version of ``bfio`` uses ``Bio-Formats`` v7.2.0 .

@@ -8,7 +8,7 @@ COPY . /bfio_src
 RUN apt update && \
     apt install software-properties-common -y && \
     add-apt-repository ppa:deadsnakes/ppa && \
-    apt install python3.9 python3.9-distutils curl -y && \
+    apt install python3.9 python3.9-distutils curl git -y && \
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
     python3.9 get-pip.py && \
     apt autoremove -y && \
@@ -26,7 +26,8 @@ RUN pip3 install cython --no-cache-dir && \
     pip3 install pyimagej==1.4.1 --no-cache-dir
 
 # Polus platform file extension
-ENV POLUS_EXT=".ome.tif"
+ENV POLUS_IMG_EXT=".ome.tif"
+ENV POLUS_TAB_EXT=".csv"
 
 # Container log level
 ENV POLUS_LOG="INFO"
@@ -38,12 +39,21 @@ ENV DATA_DIR="/data"
 RUN mkdir ${EXEC_DIR} && \
     mkdir ${DATA_DIR}
 
-# create polusai user, gid and uid are used to conform with cwl runner
-RUN groupadd -g 1000 polusai && \
-    useradd -u 1000 --no-log-init -r -m -g polusai polusai && \
+# create a non-root user named polusai
+RUN groupadd polusai && \
+    useradd --no-log-init -r -m -g polusai polusai && \
     usermod -aG sudo polusai
-    
+
 ENV HOME=/home/polusai
+RUN chmod -R o+rx ${HOME}
+# NOTE: By default, CWL adds --user=... to the docker run commands.
+# https://github.com/common-workflow-language/cwltool/blob/7b8f174828e3c07b3067e4f88568124f7c878d2d/cwltool/docker.py#L362-L366
+# Since we do not control the userid and/or groupid on the
+# host machine(s) where this docker image will be executed,
+# we must make HOME readable and executable for all users! Otherwise:
+# /usr/bin/python3: Error while finding module specification for 'polus.plugins...'
+# (ModuleNotFoundError: No module named 'polus')
+
 RUN chown -R polusai ${EXEC_DIR} && \
     chown -R polusai ${DATA_DIR} && \
     chmod -R u+rwx ${EXEC_DIR} && \
