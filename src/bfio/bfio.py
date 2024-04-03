@@ -126,7 +126,7 @@ class BioReader(BioBase):
                         "The max_workers keyword was present, but bioformats backend "
                         + "only operates with a single worker. Setting max_workers=1."
                     )
-                self.max_workers = 1
+                self._max_workers = 1
             except Exception as err:
                 if repr(err).split("(")[0] in [
                     "UnknownFormatException",
@@ -144,8 +144,8 @@ class BioReader(BioBase):
                     raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrReader(self)
-            if self.max_workers == 2:
-                self.max_workers = 1
+            if self._max_workers == 2:
+                self._max_workers = 1
                 self.logger.debug(
                     "Setting max_workers to 1, since max_workers==2 runs slower."
                     + "To change back, set the object property."
@@ -1035,7 +1035,7 @@ class BioWriter(BioBase):
                         "The max_workers keyword was present, but bioformats backend "
                         + "only operates with a single worker. Setting max_workers=1."
                     )
-                self.max_workers = 1
+                self._max_workers = 1
             except Exception as err:
                 if repr(err).split("(")[0] in [
                     "UnknownFormatException",
@@ -1053,8 +1053,8 @@ class BioWriter(BioBase):
                     raise
         elif self._backend_name == "zarr":
             self._backend = backends.ZarrWriter(self)
-            if self.max_workers == 2:
-                self.max_workers = 1
+            if self._max_workers == 2:
+                self._max_workers = 1
                 self.logger.debug(
                     "Setting max_workers to 1, since max_workers==2 runs slower."
                     + "To change back, set the object property."
