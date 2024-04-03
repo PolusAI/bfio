@@ -109,7 +109,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
             file_path = Path(file_path)
         self._file_path = file_path
 
-        self.max_workers = (
+        self._max_workers = (
             max_workers
             if max_workers is not None
             else max([multiprocessing.cpu_count() // 2, 1])
