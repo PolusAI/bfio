@@ -596,8 +596,8 @@ class PythonReader(bfio.base_classes.AbstractReader):
 
         self.logger.debug("read_image(): _tile_indices = {}".format(self._tile_indices))
 
-        if self.frontend.max_workers > 1:
-            with ThreadPoolExecutor(self.frontend.max_workers) as executor:
+        if self.frontend._max_workers > 1:
+            with ThreadPoolExecutor(self.frontend._max_workers) as executor:
                 # cast to list so that any read errors are raised
                 list(
                     executor.map(
@@ -1155,8 +1155,8 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         def compress(page_index, tile_index, data, level=1):
             return (page_index, tile_index, imagecodecs.deflate_encode(data, level))
 
-        if self.frontend.max_workers > 1:
-            with ThreadPoolExecutor(max_workers=self.frontend.max_workers) as executor:
+        if self.frontend._max_workers > 1:
+            with ThreadPoolExecutor(max_workers=self.frontend._max_workers) as executor:
                 compressed_tiles = []
                 for page_index, tileiter in tileiters:
                     for tileindex, tile in zip(tiles, tileiter):
@@ -1701,8 +1701,8 @@ try:
             ] = data
 
         def _read_image(self, X, Y, Z, C, T, output):
-            if self.frontend.max_workers > 1:
-                with ThreadPoolExecutor(self.frontend.max_workers) as executor:
+            if self.frontend._max_workers > 1:
+                with ThreadPoolExecutor(self.frontend._max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
             else:
                 for args in self._tile_indices:
@@ -1803,8 +1803,8 @@ try:
             )
 
         def _write_image(self, X, Y, Z, C, T, image):
-            if self.frontend.max_workers > 1:
-                with ThreadPoolExecutor(self.frontend.max_workers) as executor:
+            if self.frontend._max_workers > 1:
+                with ThreadPoolExecutor(self.frontend._max_workers) as executor:
                     executor.map(self._process_chunk, self._tile_indices)
             else:
                 for args in self._tile_indices:
