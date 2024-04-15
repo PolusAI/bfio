@@ -25,7 +25,9 @@ project = "bfio"
 author = "Nicholas J Schaub"
 
 # The full version, including alpha/beta/rc tags
-with open(str(Path(__file__).parent.parent.parent.joinpath("src/bfio/VERSION")), "r") as fr:
+with open(
+    str(Path(__file__).parent.parent.parent.joinpath("src/bfio/VERSION")), "r"
+) as fr:
     release = fr.readline()
 
 # -- General configuration ---------------------------------------------------
@@ -69,7 +71,7 @@ autodoc_typehints = "description"
 
 autodoc_default_options = {
     "members": True,
-    "special-members": "__getitem__,__call__,__setitem__"
+    "special-members": "__getitem__,__call__,__setitem__",
     # 'exclude-members': '__weakref__'
 }
 

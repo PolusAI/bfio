@@ -229,6 +229,8 @@ class BioBase(object, metaclass=abc.ABCMeta):
     def __getattribute__(self, name):
         # Get image dimensions using num_x, x, or X
         if len(name) == 1 and name.lower() in "xyzct":
+            if self._metadata is None:
+                self._metadata = self._backend.read_metadata()
             return getattr(
                 self._metadata.images[0].pixels, "size_{}".format(name.lower())
             )
@@ -310,6 +312,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def channel_names(self) -> typing.List[str]:
         """Get the channel names for the image."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         image = self._metadata.images[0]
         return [c.name for c in image.pixels.channels]
 
@@ -319,7 +324,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
         assert (
             len(cnames) == self.C
         ), "Number of names does not match number of channels."
-        for channel, cname in zip(self.metadata.images[0].pixels.channels, cnames):
+        for channel, cname in zip(self._metadata.images[0].pixels.channels, cnames):
             channel.name = cname
 
     @property
@@ -376,6 +381,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return (
             self._metadata.images[0].pixels.physical_size_x,
             self._metadata.images[0].pixels.physical_size_x_unit,
@@ -401,6 +409,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return (
             self._metadata.images[0].pixels.physical_size_y,
             self._metadata.images[0].pixels.physical_size_y_unit,
@@ -426,6 +437,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
         Returns:
             Units per pixel, Units (i.e. "cm" or "mm")
         """
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return (
             self._metadata.images[0].pixels.physical_size_z,
             self._metadata.images[0].pixels.physical_size_z_unit,
@@ -513,9 +527,12 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def dtype(self) -> numpy.dtype:
         """The numpy pixel type of the data."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         dtype = numpy.dtype(self._DTYPE[self._metadata.images[0].pixels.type.value])
         return dtype.newbyteorder(
-            ">" if self.metadata.images[0].pixels.big_endian else "<"
+            ">" if self._metadata.images[0].pixels.big_endian else "<"
         )
 
     @dtype.setter
@@ -534,6 +551,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def samples_per_pixel(self) -> int:
         """Number of samples per pixel."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return self._metadata.images[0].pixels.channels[0].samples_per_pixel
 
     @samples_per_pixel.setter
@@ -544,6 +564,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def spp(self):
         """Same as :attr:`.samples_per_pixel`."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return self.samples_per_pixel
 
     @spp.setter
@@ -553,6 +576,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def bytes_per_pixel(self) -> int:
         """Number of bytes per pixel."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return self._BPP[self._metadata.images[0].pixels.type.value]
 
     @bytes_per_pixel.setter
@@ -562,6 +588,9 @@ class BioBase(object, metaclass=abc.ABCMeta):
     @property
     def bpp(self):
         """Same as :attr:`.bytes_per_pixel`."""
+        if self._metadata is None:
+            self._metadata = self._backend.read_metadata()
+
         return self.bytes_per_pixel
 
     @bpp.setter
@@ -797,4 +826,57 @@ class AbstractWriter(AbstractBackend):  # NOQA: D101
 
     @abc.abstractmethod
     def _write_image(*args):
+        pass
+
+
+class TSAbstractBackend(object, metaclass=abc.ABCMeta):
+    """Base class for backend readers/writers."""
+
+    @abc.abstractmethod
+    def __init__(self, frontend: BioBase):
+        """Initialize an Abstract backend.
+
+        Args:
+            frontend (BioBase): The BioBase object associated with the backend.
+        """
+        self.frontend = frontend
+
+    @abc.abstractmethod
+    def close(self):
+        """Close the file associated with the backend.
+
+        This method must be implemented by all subclasses to properly cleanup
+        files when file io is completed.
+        """
+        pass
+
+
+class TSAbstractReader(TSAbstractBackend):
+    """Base class for file readers.
+
+    All reader objects must be a subclass of AbstractReader.
+    """
+
+    _metadata: ome_types.OME = None
+
+    @abc.abstractmethod
+    def __init__(self, frontend: BioBase):
+        """Initialize the reader object.
+
+        Args:
+            frontend (BioBase): The BioBase object associated with the backend.
+        """
+        super().__init__(frontend)
+
+    @abc.abstractmethod
+    def read_metadata(self):
+        """Read OME metadata from the file.
+
+        Subclasses must override this to properly retrieve and format the data.
+        """
+        pass
+
+    @abc.abstractmethod
+    def read_image(self, *args):
+        """Abstract read image executor."""
         pass

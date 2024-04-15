@@ -26,4 +26,5 @@ except FileNotFoundError:
 logger.info("VERSION = {}".format(__version__))
 
 
-from .bfio import BioReader, BioWriter, start  # NOQA: F401, E402
+from .bfio import BioReader, BioWriter  # NOQA: F401, E402
+from .utils import start  # NOQA: F401, E402

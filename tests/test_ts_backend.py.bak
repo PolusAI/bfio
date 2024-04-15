@@ -1,0 +1,80 @@
+# from bfiocpp import TSTiffReader, Seq
+import numpy as np
+from time import time
+
+FILE_PATH = "/home/samee/axle_data/bfio_test_images/r001_c001_z000.ome.tif"
+
+#FILE_PATH = "/home/samee/p01_x01_y01_wx0_wy0_c1.ome.tif"
+#FILE_PATH = "/home/samee/axle_dev/bfio/4d_array.ome.tif"
+# t1 = time()
+# br = TSTiffReader(FILE_PATH)
+# rows = Seq(0,1079,1)
+# cols = Seq(0,1079,1)
+# layers = Seq(0,0,1)
+# channels = Seq(0,0,1)
+# tsteps = Seq(0,0,1)
+# t2 = time()
+# tmp = br.data(rows, cols, layers, channels, tsteps)
+# t3 = time()
+
+# print(tmp.sum())
+# print(tmp.shape)
+# print(type(tmp))
+# print(tmp.dtype)
+
+# print(f"Time taken for init {(t2-t1)}")
+# print(f"Time taken for read {(t3-t2)}")
+from bfio import BioReader as BioReader
+t4 = time()
+br_ts = BioReader(FILE_PATH, backend="tensorstore")
+tmp = br_ts[:]
+print(tmp.shape)
+t5 = time()
+print(f"time taken {t5-t4}")
+
+# t4 = time()
+# br_py = BioReader(FILE_PATH, backend="python")
+# print(br_py[:].shape )
+# t5 = time()
+# print(f"time taken {t5-t4}")
+
+# tile_size_x = 1024
+# tile_size_y = 1024
+# for t in range(br_py.T):
+
+#     # Loop through channels
+#     for c in range(br_py.C):
+
+#         # Loop through z-slices
+#         for z in range(br_py.Z):
+
+#             # Loop across the length of the image
+#             for y in range(0,br_py.Y,tile_size_y):
+#                 y_max = min([br_py.Y,y+tile_size_y])
+
+#                 # Loop across the depth of the image
+#                 for x in range(0,br_py.X,tile_size_x):
+#                     x_max = min([br_py.X,x+tile_size_x])
+#                     # tmp_1 = br_ts[y:y_max,x:x_max,z:z+1,c,t]
+#                     tmp_2 = br_py[y:y_max,x:x_max,z:z+1,c,t].sum()
+#                     # print(f"sum is {np.sum(tmp_2)}")
+#                     # assert(np.sum(tmp_1-tmp_2) == 0)
+
+# print(br._metadata)
+# for ind, tiles in br_py(tile_size=[1024,1024], tile_stride=[1024,1024]):    
+#     # print(tiles.shape)
+#     tmp = np.sum(tiles)
+#     print(ind)
+# t5 = time()
+# # tmp = br[:]
+# # t6 = time()
+# print(f"time taken {t5-t4}")
+# # tmp = tmp2[0:1024, 0:1024]
+# print(tmp.sum())
+# print(tmp.shape)
+# print(type(tmp))
+# print(tmp.dtype)
+# print(f"Time taken for init {(t5-t4)}")
+# print(f"Time taken for read {(t6-t5)}")
+
+

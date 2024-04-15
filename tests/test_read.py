@@ -179,6 +179,47 @@ class TestSimpleRead(unittest.TestCase):
                     np.sum(source_data[x_start:x_end, y_start:y_end] - test_data) == 0
                 )
 
+    def test_read_unaligned_tile_boundary_tensorstore(self):
+        # create a 2D numpy array filled with random integer form 0-255
+        img_height = 8000
+        img_width = 7500
+        source_data = np.random.randint(
+            0, 256, (img_height, img_width), dtype=np.uint16
+        )
+        with bfio.BioWriter(
+            str(TEST_DIR.joinpath("test_output.ome.tiff")),
+            X=img_width,
+            Y=img_height,
+            dtype=np.uint16,
+        ) as bw:
+            bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
+
+        x_max = source_data.shape[0]
+        y_max = source_data.shape[1]
+
+        with bfio.BioReader(
+            str(TEST_DIR.joinpath("test_output.ome.tiff")), backend="tensorstore"
+        ) as test_br:
+            for i in range(100):
+                x_start = random.randint(0, x_max)
+                y_start = random.randint(0, y_max)
+                x_step = random.randint(1, 2 * 1024)
+                y_step = random.randint(1, 3 * 1024)
+
+                x_end = x_start + x_step
+                y_end = y_start + y_step
+
+                if x_end > x_max:
+                    x_end = x_max
+
+                if y_end > y_max:
+                    y_end = y_max
+
+                test_data = test_br[x_start:x_end, y_start:y_end, ...]
+                assert (
+                    np.sum(source_data[x_start:x_end, y_start:y_end] - test_data) == 0
+                )
+
 
 # Metadata tests to run on each backend
 
