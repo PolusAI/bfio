@@ -5,45 +5,14 @@ import struct
 import typing
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
 import numpy
 import ome_types
 import tifffile
-import scyjava
+
 
 from bfio import backends
 from bfio.base_classes import BioBase
-
-try:
-
-    def start() -> str:
-        """Start the jvm.
-
-        This function starts the jvm and imports all the necessary Java classes
-        to read images using the Bio-Formats toolbox.
-
-        Return:
-            The Bio-Formats JAR version.
-        """
-
-        global JAR_VERSION
-        scyjava.config.endpoints.append("ome:formats-gpl:7.2.0")
-        scyjava.start_jvm()
-        import loci
-
-        loci.common.DebugTools.setRootLevel("ERROR")
-        JAR_VERSION = loci.formats.FormatTools.VERSION
-
-        logging.getLogger("bfio.start").info(
-            "bioformats_package.jar version = {}".format(JAR_VERSION)
-        )
-
-        return JAR_VERSION
-
-except ModuleNotFoundError:
-
-    def start():  # NOQA: D103
-        raise ModuleNotFoundError("Error importing jpype or a loci_tools.jar class.")
+from bfio.ts_backends import TsOmeTiffReader
 
 
 class BioReader(BioBase):
@@ -111,6 +80,10 @@ class BioReader(BioBase):
         # Initialize BioBase
         super(BioReader, self).__init__(file_path, max_workers=max_workers)
 
+        if backend == "tensorstore":
+            # Tensorstore does not use Python's threading model
+            self._lock = None
+
         self.clean_metadata = clean_metadata
         self.set_backend(backend)
         self.level = level
@@ -118,6 +91,8 @@ class BioReader(BioBase):
         self.logger.debug("Starting the backend...")
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
+        elif self._backend_name == "tensorstore":
+            self._backend = TsOmeTiffReader(self)
         elif self._backend_name == "bioformats":
             try:
                 self._backend = backends.JavaReader(self)
@@ -151,14 +126,30 @@ class BioReader(BioBase):
                     + "To change back, set the object property."
                 )
         else:
-            raise ValueError('backend must be "python", "bioformats", or "zarr"')
+            raise ValueError(
+                'backend must be "python", "bioformats", "tensorstore" or "zarr"'
+            )
         self.logger.debug("Finished initializing the backend.")
 
-        # Preload the metadata
-        self._metadata = self._backend.read_metadata()
-
         # Get dims to speed up validation checks
-        self._DIMS = {"X": self.X, "Y": self.Y, "Z": self.Z, "C": self.C, "T": self.T}
+        if self._backend_name == "tensorstore":
+            self._DIMS = {
+                "X": self._backend.X,
+                "Y": self._backend.Y,
+                "Z": self._backend.Z,
+                "C": self._backend.C,
+                "T": self._backend.T,
+            }
+        else:
+            # Preload the metadata
+            self._metadata = self._backend.read_metadata()
+            self._DIMS = {
+                "X": self.X,
+                "Y": self.Y,
+                "Z": self.Z,
+                "C": self.C,
+                "T": self.T,
+            }
 
     def python_backend_support(self, filename: str):
         with tifffile.TiffFile(filename) as tif:
@@ -199,9 +190,11 @@ class BioReader(BioBase):
             "python",
             "bioformats",
             "zarr",
+            "tensorstore",
         ]:
             raise ValueError(
-                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
+                "Keyword argument backend must be one of"
+                + '["python", "bioformats", "zarr", "tensorstore"]'
             )
 
         # if backend not given, set backend
@@ -340,83 +333,98 @@ class BioReader(BioBase):
         Z = self._val_xyz(Z, "Z")
         C = self._val_ct(C, "C")
         T = self._val_ct(T, "T")
+        if self._backend_name == "tensorstore":
+            output = self._backend.read_image(X, Y, Z, C, T)
+            # (T, C, Z, Y, X) => (Y, X, Z, C, T)
+            output = output.transpose(3, 4, 0, 1, 2)
 
-        # Define tile bounds
-        X_tile_start = (X[0] // self._TILE_SIZE) * self._TILE_SIZE
-        Y_tile_start = (Y[0] // self._TILE_SIZE) * self._TILE_SIZE
-        X_tile_end = numpy.ceil(X[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
-        Y_tile_end = numpy.ceil(Y[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
-        X_tile_shape = X_tile_end - X_tile_start
-        Y_tile_shape = Y_tile_end - Y_tile_start
-        Z_tile_shape = Z[1] - Z[0]
+            while output.shape[-1] == 1 and output.ndim > 2:
+                output = output[..., 0]
+            return output
+        else:
 
-        # Determine if enough planes will be loaded to benefit from tiling
-        # There is a tradeoff between fast storing tiles and reshaping later versus
-        # slow storing tiles without reshaping.
-        # fast storing tiles is aligned memory, where slow storing is unaligned
-        load_tiles = 10 * (
-            (X_tile_shape * Y_tile_shape) / (self._TILE_SIZE**2) + 1
-        ) < Z_tile_shape * len(C) * len(T)
+            # Define tile bounds
+            X_tile_start = (X[0] // self._TILE_SIZE) * self._TILE_SIZE
+            Y_tile_start = (Y[0] // self._TILE_SIZE) * self._TILE_SIZE
+            X_tile_end = (
+                numpy.ceil(X[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
+            )
+            Y_tile_end = (
+                numpy.ceil(Y[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
+            )
+            X_tile_shape = X_tile_end - X_tile_start
+            Y_tile_shape = Y_tile_end - Y_tile_start
+            Z_tile_shape = Z[1] - Z[0]
 
-        # Initialize the output for zarr and bioformats
-        if self._backend_name != "python":
-            output = numpy.zeros(
-                [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)],
-                dtype=self.dtype,
+            # Determine if enough planes will be loaded to benefit from tiling
+            # There is a tradeoff between fast storing tiles and reshaping later versus
+            # slow storing tiles without reshaping.
+            # fast storing tiles is aligned memory, where slow storing is unaligned
+            load_tiles = 10 * (
+                (X_tile_shape * Y_tile_shape) / (self._TILE_SIZE**2) + 1
+            ) < Z_tile_shape * len(C) * len(T)
+
+            # Initialize the output for zarr and bioformats
+            if self._backend_name != "python":
+                output = numpy.zeros(
+                    [Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)],
+                    dtype=self.dtype,
+                )
+
+            # Initialize the output for python
+            # We use a different matrix shape for loading images to reduce memory
+            # copy time
+            # TODO: Should use this same scheme for the other readers to reduce
+            # copy times
+            else:
+                if load_tiles:
+                    y_tile = self._TILE_SIZE
+                    x_tile = self._TILE_SIZE
+                    output = numpy.zeros(
+                        [
+                            Z_tile_shape,
+                            len(C),
+                            len(T),
+                            Y_tile_shape // self._TILE_SIZE,
+                            X_tile_shape // self._TILE_SIZE,
+                            y_tile,
+                            x_tile,
+                        ],
+                        dtype=self.dtype,
+                        order="C",
+                    )
+                else:
+                    output = numpy.zeros(
+                        [Z_tile_shape, len(C), len(T), Y_tile_shape, X_tile_shape],
+                        dtype=self.dtype,
+                        order="C",
+                    )
+
+            # Read the image
+            self._backend.load_tiles = load_tiles
+            self._backend.read_image(
+                [X_tile_start, X_tile_end], [Y_tile_start, Y_tile_end], Z, C, T, output
             )
 
-        # Initialize the output for python
-        # We use a different matrix shape for loading images to reduce memory copy time
-        # TODO: Should use this same scheme for the other readers to reduce copy times
-        else:
-            if load_tiles:
-                y_tile = self._TILE_SIZE
-                x_tile = self._TILE_SIZE
-                output = numpy.zeros(
-                    [
-                        Z_tile_shape,
-                        len(C),
-                        len(T),
-                        Y_tile_shape // self._TILE_SIZE,
-                        X_tile_shape // self._TILE_SIZE,
-                        y_tile,
-                        x_tile,
-                    ],
-                    dtype=self.dtype,
-                    order="C",
-                )
-            else:
-                output = numpy.zeros(
-                    [Z_tile_shape, len(C), len(T), Y_tile_shape, X_tile_shape],
-                    dtype=self.dtype,
-                    order="C",
-                )
+            # Reshape the arrays into expected format
+            if self._backend_name == "python":
+                if load_tiles:
+                    output = output.transpose(3, 5, 4, 6, 0, 1, 2)
+                    output = output.reshape(
+                        Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
+                    )
+                else:
+                    output = output.transpose(3, 4, 0, 1, 2)
 
-        # Read the image
-        self._backend.load_tiles = load_tiles
-        self._backend.read_image(
-            [X_tile_start, X_tile_end], [Y_tile_start, Y_tile_end], Z, C, T, output
-        )
+            output = output[
+                Y[0] - Y_tile_start : Y[1] - Y_tile_start,
+                X[0] - X_tile_start : X[1] - X_tile_start,
+                ...,
+            ]
+            while output.shape[-1] == 1 and output.ndim > 2:
+                output = output[..., 0]
 
-        # Reshape the arrays into expected format
-        if self._backend_name == "python":
-            if load_tiles:
-                output = output.transpose(3, 5, 4, 6, 0, 1, 2)
-                output = output.reshape(
-                    Y_tile_shape, X_tile_shape, Z_tile_shape, len(C), len(T)
-                )
-            else:
-                output = output.transpose(3, 4, 0, 1, 2)
-
-        output = output[
-            Y[0] - Y_tile_start : Y[1] - Y_tile_start,
-            X[0] - X_tile_start : X[1] - X_tile_start,
-            ...,
-        ]
-        while output.shape[-1] == 1 and output.ndim > 2:
-            output = output[..., 0]
-
-        return output
+            return output
 
     def _fetch(self) -> numpy.ndarray:
         """Method for fetching image supertiles.
@@ -666,7 +674,6 @@ class BioReader(BioBase):
         tile_stride = self._iter_tile_stride
         batch_size = self._iter_batch_size
         channels = self._iter_channels
-
         if tile_size is None:
             raise SyntaxError(
                 "Cannot directly iterate over a BioReader object."
@@ -678,16 +685,6 @@ class BioReader(BioBase):
         self._iter_batch_size = None
         self._iter_channels = None
 
-        # Ensure that the number of tiles does not exceed the supertile width
-        if batch_size is None:
-            batch_size = min([32, self.maximum_batch_size(tile_size, tile_stride)])
-        else:
-            assert batch_size <= self.maximum_batch_size(
-                tile_size, tile_stride
-            ), "batch_size must be less than or equal to {}.".format(
-                self.maximum_batch_size(tile_size, tile_stride)
-            )
-
         # input error checking
         assert len(tile_size) == 2, "tile_size must be a list with 2 elements"
         if tile_stride is not None:
@@ -695,119 +692,157 @@ class BioReader(BioBase):
         else:
             tile_stride = tile_size
 
-        # calculate padding if needed
-        if not (set(tile_size) & set(tile_stride)):
-            xyoffset = [
-                (tile_size[0] - tile_stride[0]) / 2,
-                (tile_size[1] - tile_stride[1]) / 2,
-            ]
-            xypad = [
-                (tile_size[0] - tile_stride[0]) / 2,
-                (tile_size[1] - tile_stride[1]) / 2,
-            ]
-            xypad[0] = (
-                xyoffset[0] + (tile_stride[0] - numpy.mod(self.Y, tile_stride[0])) / 2
-            )
-            xypad[1] = (
-                xyoffset[1] + (tile_stride[1] - numpy.mod(self.X, tile_stride[1])) / 2
-            )
-            xypad = (
-                (int(xyoffset[0]), int(2 * xypad[0] - xyoffset[0])),
-                (int(xyoffset[1]), int(2 * xypad[1] - xyoffset[1])),
-            )
+        if self._backend_name == "tensorstore":
+
+            self._backend._rdr.send_iter_read_request(tile_size, tile_stride)
+            for data in self._backend._rdr._image_reader.__iter__():
+                row_index, col_index = (
+                    self._backend._rdr._image_reader.get_tile_coordinate(
+                        data[3], data[5], tile_size[0], tile_size[1]
+                    )
+                )
+                yield (
+                    data[0],
+                    data[1],
+                    data[2],
+                    row_index,
+                    col_index,
+                ), self._backend._rdr._image_reader.get_iterator_requested_tile_data(
+                    data[0], data[1], data[2], data[3], data[4], data[5], data[6]
+                )
         else:
-            xyoffset = [0, 0]
-            xypad = (
-                (0, max([tile_size[0] - tile_stride[0], 0])),
-                (0, max([tile_size[1] - tile_stride[1], 0])),
+            # Ensure that the number of tiles does not exceed the supertile width
+            if batch_size is None:
+                batch_size = min([32, self.maximum_batch_size(tile_size, tile_stride)])
+            else:
+                assert batch_size <= self.maximum_batch_size(
+                    tile_size, tile_stride
+                ), "batch_size must be less than or equal to {}.".format(
+                    self.maximum_batch_size(tile_size, tile_stride)
+                )
+
+            # calculate padding if needed
+            if not (set(tile_size) & set(tile_stride)):
+                xyoffset = [
+                    (tile_size[0] - tile_stride[0]) / 2,
+                    (tile_size[1] - tile_stride[1]) / 2,
+                ]
+                xypad = [
+                    (tile_size[0] - tile_stride[0]) / 2,
+                    (tile_size[1] - tile_stride[1]) / 2,
+                ]
+                xypad[0] = (
+                    xyoffset[0]
+                    + (tile_stride[0] - numpy.mod(self.Y, tile_stride[0])) / 2
+                )
+                xypad[1] = (
+                    xyoffset[1]
+                    + (tile_stride[1] - numpy.mod(self.X, tile_stride[1])) / 2
+                )
+                xypad = (
+                    (int(xyoffset[0]), int(2 * xypad[0] - xyoffset[0])),
+                    (int(xyoffset[1]), int(2 * xypad[1] - xyoffset[1])),
+                )
+            else:
+                xyoffset = [0, 0]
+                xypad = (
+                    (0, max([tile_size[0] - tile_stride[0], 0])),
+                    (0, max([tile_size[1] - tile_stride[1], 0])),
+                )
+
+            # determine supertile sizes
+            y_tile_dim = int(numpy.ceil((self.Y - 1) / self._TILE_SIZE))
+            x_tile_dim = 1
+
+            # Initialize the pixel buffer
+            self._pixel_buffer = numpy.zeros(
+                (
+                    y_tile_dim * self._TILE_SIZE + tile_size[0],
+                    2 * x_tile_dim * self._TILE_SIZE + tile_size[1],
+                ),
+                dtype=self.dtype,
             )
+            self._tile_x_offset = -xypad[1][0]
+            self._tile_y_offset = -xypad[0][0]
 
-        # determine supertile sizes
-        y_tile_dim = int(numpy.ceil((self.Y - 1) / self._TILE_SIZE))
-        x_tile_dim = 1
-
-        # Initialize the pixel buffer
-        self._pixel_buffer = numpy.zeros(
-            (
-                y_tile_dim * self._TILE_SIZE + tile_size[0],
-                2 * x_tile_dim * self._TILE_SIZE + tile_size[1],
-            ),
-            dtype=self.dtype,
-        )
-        self._tile_x_offset = -xypad[1][0]
-        self._tile_y_offset = -xypad[0][0]
-
-        # Generate the supertile loading order
-        tiles = []
-        y_tile_list = list(range(0, self.Y + xypad[0][1], self._TILE_SIZE * y_tile_dim))
-        if y_tile_list[-1] != self._TILE_SIZE * y_tile_dim:
-            y_tile_list.append(self._TILE_SIZE * y_tile_dim)
-        if y_tile_list[0] != xypad[0][0]:
-            y_tile_list[0] = -xypad[0][0]
-        x_tile_list = list(range(0, self.X + xypad[1][1], self._TILE_SIZE * x_tile_dim))
-        if x_tile_list[-1] < self.X + xypad[1][1]:
-            x_tile_list.append(x_tile_list[-1] + self._TILE_SIZE)
-        if x_tile_list[0] != xypad[1][0]:
-            x_tile_list[0] = -xypad[1][0]
-        for yi in range(len(y_tile_list) - 1):
-            for xi in range(len(x_tile_list) - 1):
-                y_range = [y_tile_list[yi], y_tile_list[yi + 1]]
-                x_range = [x_tile_list[xi], x_tile_list[xi + 1]]
-                tiles.append([x_range, y_range])
-                self._supertile_index.put((x_range, y_range, [0, 1], [0], [0]))
-
-        # Start the thread pool and start loading the first supertile
-        thread_pool = ThreadPoolExecutor(self._max_workers)
-        self._fetch_thread = thread_pool.submit(self._fetch)
-
-        # generate the indices for each tile
-        # TODO: modify this to grab more than just the first z-index
-        X = []
-        Y = []
-        Z = []
-        C = []
-        T = []
-        x_list = numpy.array(numpy.arange(-xypad[1][0], self.X, tile_stride[1]))
-        y_list = numpy.array(numpy.arange(-xypad[0][0], self.Y, tile_stride[0]))
-        for x in x_list:
-            for y in y_list:
-                X.append([x, x + tile_size[1]])
-                Y.append([y, y + tile_size[0]])
-                Z.append([0, 1])
-                C.append(channels)
-                T.append([0])
-
-        # Set up batches
-        batches = list(range(0, len(X), batch_size))
-
-        # get the first batch
-        b = min([batch_size, len(X)])
-        index = (X[0:b], Y[0:b], Z[0:b], C[0:b], T[0:b])
-        images = self._get_tiles(*index)
-
-        # start looping through batches
-        for bn in batches[1:]:
-            # start the thread to get the next batch
-            b = min([bn + batch_size, len(X)])
-            self._tile_thread = thread_pool.submit(
-                self._get_tiles, X[bn:b], Y[bn:b], Z[bn:b], C[bn:b], T[bn:b]
+            # Generate the supertile loading order
+            tiles = []
+            y_tile_list = list(
+                range(0, self.Y + xypad[0][1], self._TILE_SIZE * y_tile_dim)
             )
+            if y_tile_list[-1] != self._TILE_SIZE * y_tile_dim:
+                y_tile_list.append(self._TILE_SIZE * y_tile_dim)
+            if y_tile_list[0] != xypad[0][0]:
+                y_tile_list[0] = -xypad[0][0]
+            x_tile_list = list(
+                range(0, self.X + xypad[1][1], self._TILE_SIZE * x_tile_dim)
+            )
+            if x_tile_list[-1] < self.X + xypad[1][1]:
+                x_tile_list.append(x_tile_list[-1] + self._TILE_SIZE)
+            if x_tile_list[0] != xypad[1][0]:
+                x_tile_list[0] = -xypad[1][0]
+            for yi in range(len(y_tile_list) - 1):
+                for xi in range(len(x_tile_list) - 1):
+                    y_range = [y_tile_list[yi], y_tile_list[yi + 1]]
+                    x_range = [x_tile_list[xi], x_tile_list[xi + 1]]
+                    tiles.append([x_range, y_range])
+                    self._supertile_index.put((x_range, y_range, [0, 1], [0], [0]))
 
-            # Load another supertile if possible
-            if self._supertile_index.qsize() > 0 and not self._fetch_thread.running():
-                self._fetch_thread = thread_pool.submit(self._fetch)
+            # Start the thread pool and start loading the first supertile
+            thread_pool = ThreadPoolExecutor(self._max_workers)
+            self._fetch_thread = thread_pool.submit(self._fetch)
 
-            # return the current set of images
+            # generate the indices for each tile
+            # TODO: modify this to grab more than just the first z-index
+            X = []
+            Y = []
+            Z = []
+            C = []
+            T = []
+            x_list = numpy.array(numpy.arange(-xypad[1][0], self.X, tile_stride[1]))
+            y_list = numpy.array(numpy.arange(-xypad[0][0], self.Y, tile_stride[0]))
+            for x in x_list:
+                for y in y_list:
+                    X.append([x, x + tile_size[1]])
+                    Y.append([y, y + tile_size[0]])
+                    Z.append([0, 1])
+                    C.append(channels)
+                    T.append([0])
+
+            # Set up batches
+            batches = list(range(0, len(X), batch_size))
+
+            # get the first batch
+            b = min([batch_size, len(X)])
+            index = (X[0:b], Y[0:b], Z[0:b], C[0:b], T[0:b])
+            images = self._get_tiles(*index)
+
+            # start looping through batches
+            for bn in batches[1:]:
+                # start the thread to get the next batch
+                b = min([bn + batch_size, len(X)])
+                self._tile_thread = thread_pool.submit(
+                    self._get_tiles, X[bn:b], Y[bn:b], Z[bn:b], C[bn:b], T[bn:b]
+                )
+
+                # Load another supertile if possible
+                if (
+                    self._supertile_index.qsize() > 0
+                    and not self._fetch_thread.running()
+                ):
+                    self._fetch_thread = thread_pool.submit(self._fetch)
+
+                # return the current set of images
+                yield images, index
+
+                # get the images from the thread
+                index = (X[bn:b], Y[bn:b], Z[bn:b], C[bn:b], T[bn:b])
+                images = self._tile_thread.result()
+
+            thread_pool.shutdown()
+
+            # return the last set of images
             yield images, index
-
-            # get the images from the thread
-            index = (X[bn:b], Y[bn:b], Z[bn:b], C[bn:b], T[bn:b])
-            images = self._tile_thread.result()
-
-        thread_pool.shutdown()
-
-        # return the last set of images
-        yield images, index
 
     @classmethod
     def image_size(cls, filepath: Path):  # NOQA: C901

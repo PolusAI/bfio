@@ -10,7 +10,8 @@ requires = [
   "zarr>=2.6.1",
   "scyjava",
   "jpype1",
-  "tifffile>=2022.8.12"
+  "tifffile>=2022.8.12",
+  "bfiocpp"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -25,7 +26,8 @@ dependencies = [
     "zarr>=2.6.1",
     "scyjava",
     "jpype1",
-    "tifffile>=2022.8.12"
+    "tifffile>=2022.8.12",
+    "bfiocpp"
 ]
 
 description = "Simple reading and writing classes for tiled tiffs using Bio-Formats."
