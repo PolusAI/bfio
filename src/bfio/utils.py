@@ -37,7 +37,7 @@ try:
         """
 
         global JAR_VERSION
-        scyjava.config.endpoints.append("ome:formats-gpl:7.2.0")
+        scyjava.config.endpoints.append("ome:formats-gpl:7.3.0")
         scyjava.start_jvm()
         import loci
 

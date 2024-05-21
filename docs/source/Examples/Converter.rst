@@ -18,7 +18,7 @@ are available in ``bfio``.
    Tiled tiff is the preferred file format for reading/writing arbitrarily sized
    images.
 2. ``backend="bioformats"`` can be used to read any
-   `any format supported by Bio-Formats <https://docs.openmicroscopy.org/bio-formats/7.2.0/supported-formats.html>`_.
+   `any format supported by Bio-Formats <https://docs.openmicroscopy.org/bio-formats/7.3.0/supported-formats.html>`_.
    The BioWriter with java backend will only save images as OME tiled tiff.
 3. ``backend="zarr"`` can be used to read/write a subset of Zarr files following
    the `OME Zarr spec <https://ngff.openmicroscopy.org/latest/>`_.
