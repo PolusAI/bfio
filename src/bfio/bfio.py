@@ -12,7 +12,7 @@ import tifffile
 
 from bfio import backends
 from bfio.base_classes import BioBase
-from bfio.ts_backends import TsOmeTiffReader
+from bfio.ts_backends import TensorstoreReader
 
 
 class BioReader(BioBase):
@@ -92,7 +92,7 @@ class BioReader(BioBase):
         if self._backend_name == "python":
             self._backend = backends.PythonReader(self)
         elif self._backend_name == "tensorstore":
-            self._backend = TsOmeTiffReader(self)
+            self._backend = TensorstoreReader(self)
         elif self._backend_name == "bioformats":
             try:
                 self._backend = backends.JavaReader(self)

@@ -228,12 +228,17 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     def __getattribute__(self, name):
         # Get image dimensions using num_x, x, or X
+        
         if len(name) == 1 and name.lower() in "xyzct":
-            if self._metadata is None:
-                self._metadata = self._backend.read_metadata()
-            return getattr(
-                self._metadata.images[0].pixels, "size_{}".format(name.lower())
-            )
+            # for tensorstore, we do not need to parse metadata to get shape
+            if self._backend_name == "tensorstore":
+                return getattr(self._backend, name.upper())
+            else:
+                if self._metadata is None:
+                    self._metadata = self._backend.read_metadata()
+                return getattr(
+                    self._metadata.images[0].pixels, "size_{}".format(name.lower())
+                )
         else:
             return object.__getattribute__(self, name)
 

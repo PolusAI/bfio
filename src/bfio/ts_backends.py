@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # import core packages
 import logging
+from pathlib import Path
 from typing import Dict
 
 
@@ -9,34 +10,98 @@ import ome_types
 from xml.etree import ElementTree as ET
 
 
-from bfiocpp import TSTiffReader, Seq
+from bfiocpp import TSReader, Seq, FileType
 import bfio.base_classes
 from bfio.utils import clean_ome_xml_for_known_issues
+import zarr
 
-
-class TsOmeTiffReader(bfio.base_classes.TSAbstractReader):
-    logger = logging.getLogger("bfio.backends.TsOmeTiffReader")
+class TensorstoreReader(bfio.base_classes.TSAbstractReader):
+    logger = logging.getLogger("bfio.backends.TensorstoreReader")
 
     _rdr = None
     _offsets_bytes = None
     _STATE_DICT = ["_metadata", "frontend"]
 
+
+
     def __init__(self, frontend):
         super().__init__(frontend)
 
-        self.logger.debug("__init__(): Initializing _rdr (TSTiffReader)...")
-        self._rdr = TSTiffReader(str(self.frontend._file_path))
+        self.logger.debug("__init__(): Initializing _rdr (TSReader)...")
+        extension = "".join(self.frontend._file_path.suffixes)
+        if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
+            # # check if it satisfies all the condition for python backend
+            self._file_type = FileType.OmeTiff
+            self._rdr = TSReader(str(self.frontend._file_path), FileType.OmeTiff, "")
+        elif extension.endswith(".zarr"):
+            # if path exists, make sure it is a directory
+            if not Path.is_dir(self.frontend._file_path):
+                raise ValueError(
+                'this filetype is not supported by tensorstore backend'
+                 )
+            else:
+                zarr_path, axes_list = self.get_zarr_array_info()
+                self._file_type = FileType.OmeZarr
+                self._rdr = TSReader(zarr_path, FileType.OmeZarr, axes_list)
+
         self.X = self._rdr._X
         self.Y = self._rdr._Y
         self.Z = self._rdr._Z
         self.C = self._rdr._C
         self.T = self._rdr._T
+        self.data_type = self._rdr._datatype
 
-        # do test for strip mages
 
-        # do test for interleaved images
+    def get_zarr_array_info(self):
+        self.logger.debug(f"Level is {self.frontend.level}")
 
-        # do test for dimension order
+        root = None
+        root_path = self.frontend._file_path
+        try:
+            root = zarr.open(str(root_path.resolve()), mode="r")
+        except zarr.errors.PathNotFoundError:
+            # a workaround for pre-compute slide output directory structure
+            root_path = self.frontend._file_path/"data.zarr"
+            root = zarr.open(root_path.resolve(), mode="r")
+
+        axes_list = ""
+        if self.frontend.level is None:
+            if isinstance(root, zarr.core.Array):
+                return str(root_path.resolve())
+            elif isinstance(root, zarr.hierarchy.Group):
+                #  the top level is a group, check if this has any arrays
+                num_arrays = len(sorted(root.array_keys()))
+                if num_arrays > 0:
+                    array_key = next(root.array_keys())
+                    root_path = root_path/str(array_key)
+                    try:
+                        axes_metadata = root.attrs["multiscales"][0]["axes"]
+                        for axes in axes_metadata:
+                            axes_list.append(axes["name"])
+                    except KeyError:
+                        self.logger.warning(
+                            "Unable to find multiscales metadata. Z, C and T "
+                            + "dimensions might be incorrect.")
+
+                    return str(root_path.resolve()), axes_list
+                else:
+                    # need to go one more level
+                    group_key = next(root.group_keys())
+                    root = root[group_key]
+                    try:
+                        axes_metadata = root.attrs["multiscales"][0]["axes"]
+                        for axes in axes_metadata:
+                            axes_list.append(axes["name"])
+                    except KeyError:
+                        self.logger.warning(
+                            "Unable to find multiscales metadata. Z, C and T "
+                            + "dimensions might be incorrect.")
+                        
+                    array_key = next(root.array_keys())
+                    root_path = root_path/str(group_key)/str(array_key)
+                    return str(root_path.resolve()), axes_list
+            else:
+                return str(root_path.resolve()), axes_list
 
     def __getstate__(self) -> Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
@@ -54,22 +119,12 @@ class TsOmeTiffReader(bfio.base_classes.TSAbstractReader):
     def read_metadata(self):
 
         self.logger.debug("read_metadata(): Reading metadata...")
-        if self._metadata is None:
-            try:
-                self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata(), validate=False
-                )
-            except (ET.ParseError, ValueError):
-                if self.frontend.clean_metadata:
-                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata())
-                    self._metadata = ome_types.from_xml(cleaned, validate=False)
-                    self.logger.warning(
-                        "read_metadata(): OME XML required reformatting."
-                    )
-                else:
-                    raise
+        return None
+        if self._file_type == FileType.OmeTiff:
+            return self.read_tiff_metadata()
+        if self._file_type == FileType.OmeZarr:
+            return self.read_zarr_metadata()
 
-        return self._metadata
 
     def read_image(self, X, Y, Z, C, T):
 
@@ -92,3 +147,116 @@ class TsOmeTiffReader(bfio.base_classes.TSAbstractReader):
 
     def __del__(self):
         self.close()
+
+    def read_tiff_metadata(self):
+        self.logger.debug("read_tiff_metadata(): Reading metadata...")
+        if self._metadata is None:
+            try:
+                self._metadata = ome_types.from_xml(
+                    self._rdr.ome_metadata(), validate=False
+                )
+            except (ET.ParseError, ValueError):
+                if self.frontend.clean_metadata:
+                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata())
+                    self._metadata = ome_types.from_xml(cleaned, validate=False)
+                    self.logger.warning(
+                        "read_metadata(): OME XML required reformatting."
+                    )
+                else:
+                    raise
+
+        return self._metadata
+    
+    def read_zarr_metadata(self):
+        self.logger.debug("read_zarr_metadata(): Reading metadata...")
+        if self._metadata is None:
+       
+            metadata_path = self.frontend._file_path.joinpath(
+                "METADATA.ome.xml"
+            )
+
+            if not metadata_path.exists():
+                # try to look for OME directory
+                metadata_path = self.frontend._file_path.joinpath("OME").joinpath(
+                    "METADATA.ome.xml"
+                )
+            if metadata_path.exists():
+                if self._metadata is None:
+                    with open(metadata_path) as fr:
+                        metadata = fr.read()
+
+                    try:
+                        self._metadata = ome_types.from_xml(metadata, validate=False)
+                    except ET.ParseError:
+                        if self.frontend.clean_metadata:
+                            cleaned = clean_ome_xml_for_known_issues(metadata)
+                            self._metadata = ome_types.from_xml(cleaned, validate=False)
+                            self.logger.warning(
+                                "read_metadata(): OME XML required reformatting."
+                            )
+                        else:
+                            raise
+
+                if self.frontend.level is not None:
+                    self._metadata.images[0].pixels.size_x = self._rdr._X
+                    self._metadata.images[0].pixels.size_y = self._rdr._Y
+
+                return self._metadata
+            else:
+                # Couldn't find OMEXML metadata, scrape metadata from file
+                omexml = ome_types.model.OME.model_construct()
+                ome_dtype = self._rdr.dtype.name
+                if ome_dtype == "float64":
+                    ome_dtype = "double"  
+                elif ome_dtype == "float32":
+                    ome_dtype = "float"  
+                elif ome_dtype == "uint8":
+                    ome_dtype = "uint8"  
+                elif ome_dtype == "uint16":
+                    ome_dtype = "uint16"  
+                elif ome_dtype == "uint32":
+                    ome_dtype = "uint32"  
+                elif ome_dtype == "uint64":
+                    ome_dtype = "uint64"  
+                elif ome_dtype == "int8":
+                    ome_dtype = "int8"  
+                elif ome_dtype == "int16":
+                    ome_dtype = "int16" 
+                elif ome_dtype == "int32":
+                    ome_dtype = "int32" 
+                elif ome_dtype == "int64":
+                    ome_dtype = "int64" 
+                else:
+                    pass
+                # this is speculation, since each array in a group, in theory,
+                # can have distinct properties
+                ome_dim_order = ome_types.model.Pixels_DimensionOrder.XYZCT
+                size_x = self._rdr._X
+                size_y = self._rdr._Y
+                size_z = self._rdr._Z
+                size_c = self._rdr._C
+                size_t = self._rdr._T
+
+                ome_pixel = ome_types.model.Pixels(
+                    dimension_order=ome_dim_order,
+                    big_endian=False,
+                    size_x=size_x,
+                    size_y=size_y,
+                    size_z=size_z,
+                    size_c=size_c,
+                    size_t=size_t,
+                    channels=[],
+                    type=ome_dtype,
+                )
+
+                for i in range(ome_pixel.size_c):
+                    ome_pixel.channels.append(ome_types.model.Channel())
+
+                omexml.images.append(
+                    ome_types.model.Image(
+                        name=Path(self.frontend._file_path).name, pixels=ome_pixel
+                    )
+                )
+
+                self._metadata = omexml
+                return self._metadata
