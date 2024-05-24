@@ -119,7 +119,6 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
     def read_metadata(self):
 
         self.logger.debug("read_metadata(): Reading metadata...")
-        return None
         if self._file_type == FileType.OmeTiff:
             return self.read_tiff_metadata()
         if self._file_type == FileType.OmeZarr:
@@ -152,11 +151,13 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
         if self._metadata is None:
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.ome_metadata(), validate=False
+                    self._rdr.get_ome_metadata(), validate=False
                 )
             except (ET.ParseError, ValueError):
                 if self.frontend.clean_metadata:
-                    cleaned = clean_ome_xml_for_known_issues(self._rdr.ome_metadata())
+                    cleaned = clean_ome_xml_for_known_issues(
+                        self._rdr.get_ome_metadata()
+                    )
                     self._metadata = ome_types.from_xml(cleaned, validate=False)
                     self.logger.warning(
                         "read_metadata(): OME XML required reformatting."
