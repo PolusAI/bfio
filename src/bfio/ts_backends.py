@@ -74,8 +74,9 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     root_path = root_path / str(array_key)
                     try:
                         axes_metadata = root.attrs["multiscales"][0]["axes"]
-                        for axes in axes_metadata:
-                            axes_list.append(axes["name"])
+                        axes_list = "".join(
+                            axes["name"].upper() for axes in axes_metadata
+                        )
                     except KeyError:
                         self.logger.warning(
                             "Unable to find multiscales metadata. Z, C and T "
@@ -89,8 +90,9 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     root = root[group_key]
                     try:
                         axes_metadata = root.attrs["multiscales"][0]["axes"]
-                        for axes in axes_metadata:
-                            axes_list.append(axes["name"])
+                        axes_list = "".join(
+                            axes["name"].upper() for axes in axes_metadata
+                        )
                     except KeyError:
                         self.logger.warning(
                             "Unable to find multiscales metadata. Z, C and T "
@@ -102,6 +104,38 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     return str(root_path.resolve()), axes_list
             else:
                 return str(root_path.resolve()), axes_list
+        else:
+            if isinstance(root, zarr.core.Array):
+                self.close()
+                raise ValueError(
+                    "Level is specified but the zarr file does not contain "
+                    + "multiple resoulutions."
+                )
+            elif isinstance(root, zarr.hierarchy.Group):
+                if len(sorted(root.array_keys())) > self.frontend.level:
+                    root_path = root_path / str(self.frontend.level)
+                    try:
+                        axes_metadata = root.attrs["multiscales"][0]["axes"]
+                        axes_list = "".join(
+                            axes["name"].upper() for axes in axes_metadata
+                        )
+                    except KeyError:
+                        self.logger.warning(
+                            "Unable to find multiscales metadata. Z, C and T "
+                            + "dimensions might be incorrect."
+                        )
+                    return str(root_path.resolve()), axes_list
+                else:
+                    raise ValueError(
+                        "The zarr file does not contain resolution "
+                        + "level {}.".format(self.frontend.level)
+                    )
+            else:
+                raise ValueError(
+                    "The zarr file does not contain resolution level {}.".format(
+                        self.frontend.level
+                    )
+                )
 
     def __getstate__(self) -> Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
@@ -203,7 +237,7 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
             else:
                 # Couldn't find OMEXML metadata, scrape metadata from file
                 omexml = ome_types.model.OME.model_construct()
-                ome_dtype = self._rdr.dtype.name
+                ome_dtype = self._rdr._datatype
                 if ome_dtype == "float64":
                     ome_dtype = "double"
                 elif ome_dtype == "float32":
