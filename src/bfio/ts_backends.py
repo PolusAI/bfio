@@ -15,14 +15,13 @@ import bfio.base_classes
 from bfio.utils import clean_ome_xml_for_known_issues
 import zarr
 
+
 class TensorstoreReader(bfio.base_classes.TSAbstractReader):
     logger = logging.getLogger("bfio.backends.TensorstoreReader")
 
     _rdr = None
     _offsets_bytes = None
     _STATE_DICT = ["_metadata", "frontend"]
-
-
 
     def __init__(self, frontend):
         super().__init__(frontend)
@@ -37,8 +36,8 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
             # if path exists, make sure it is a directory
             if not Path.is_dir(self.frontend._file_path):
                 raise ValueError(
-                'this filetype is not supported by tensorstore backend'
-                 )
+                    "this filetype is not supported by tensorstore backend"
+                )
             else:
                 zarr_path, axes_list = self.get_zarr_array_info()
                 self._file_type = FileType.OmeZarr
@@ -51,7 +50,6 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
         self.T = self._rdr._T
         self.data_type = self._rdr._datatype
 
-
     def get_zarr_array_info(self):
         self.logger.debug(f"Level is {self.frontend.level}")
 
@@ -61,19 +59,19 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
             root = zarr.open(str(root_path.resolve()), mode="r")
         except zarr.errors.PathNotFoundError:
             # a workaround for pre-compute slide output directory structure
-            root_path = self.frontend._file_path/"data.zarr"
+            root_path = self.frontend._file_path / "data.zarr"
             root = zarr.open(root_path.resolve(), mode="r")
 
         axes_list = ""
         if self.frontend.level is None:
             if isinstance(root, zarr.core.Array):
-                return str(root_path.resolve())
+                return str(root_path.resolve()), axes_list
             elif isinstance(root, zarr.hierarchy.Group):
                 #  the top level is a group, check if this has any arrays
                 num_arrays = len(sorted(root.array_keys()))
                 if num_arrays > 0:
                     array_key = next(root.array_keys())
-                    root_path = root_path/str(array_key)
+                    root_path = root_path / str(array_key)
                     try:
                         axes_metadata = root.attrs["multiscales"][0]["axes"]
                         for axes in axes_metadata:
@@ -81,7 +79,8 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     except KeyError:
                         self.logger.warning(
                             "Unable to find multiscales metadata. Z, C and T "
-                            + "dimensions might be incorrect.")
+                            + "dimensions might be incorrect."
+                        )
 
                     return str(root_path.resolve()), axes_list
                 else:
@@ -95,10 +94,11 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     except KeyError:
                         self.logger.warning(
                             "Unable to find multiscales metadata. Z, C and T "
-                            + "dimensions might be incorrect.")
-                        
+                            + "dimensions might be incorrect."
+                        )
+
                     array_key = next(root.array_keys())
-                    root_path = root_path/str(group_key)/str(array_key)
+                    root_path = root_path / str(group_key) / str(array_key)
                     return str(root_path.resolve()), axes_list
             else:
                 return str(root_path.resolve()), axes_list
@@ -124,7 +124,6 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
             return self.read_tiff_metadata()
         if self._file_type == FileType.OmeZarr:
             return self.read_zarr_metadata()
-
 
     def read_image(self, X, Y, Z, C, T):
 
@@ -166,14 +165,12 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     raise
 
         return self._metadata
-    
+
     def read_zarr_metadata(self):
         self.logger.debug("read_zarr_metadata(): Reading metadata...")
         if self._metadata is None:
-       
-            metadata_path = self.frontend._file_path.joinpath(
-                "METADATA.ome.xml"
-            )
+
+            metadata_path = self.frontend._file_path.joinpath("METADATA.ome.xml")
 
             if not metadata_path.exists():
                 # try to look for OME directory
@@ -207,25 +204,9 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                 omexml = ome_types.model.OME.model_construct()
                 ome_dtype = self._rdr.dtype.name
                 if ome_dtype == "float64":
-                    ome_dtype = "double"  
+                    ome_dtype = "double"
                 elif ome_dtype == "float32":
-                    ome_dtype = "float"  
-                elif ome_dtype == "uint8":
-                    ome_dtype = "uint8"  
-                elif ome_dtype == "uint16":
-                    ome_dtype = "uint16"  
-                elif ome_dtype == "uint32":
-                    ome_dtype = "uint32"  
-                elif ome_dtype == "uint64":
-                    ome_dtype = "uint64"  
-                elif ome_dtype == "int8":
-                    ome_dtype = "int8"  
-                elif ome_dtype == "int16":
-                    ome_dtype = "int16" 
-                elif ome_dtype == "int32":
-                    ome_dtype = "int32" 
-                elif ome_dtype == "int64":
-                    ome_dtype = "int64" 
+                    ome_dtype = "float"
                 else:
                     pass
                 # this is speculation, since each array in a group, in theory,
