@@ -72,6 +72,7 @@ class BioBase(object, metaclass=abc.ABCMeta):
 
     # protected backend object for interfacing with the file on disk
     _backend = None
+    _backend_name = None
 
     # protected attribute to hold metadata
     _metadata: ome_types.model.OME = None

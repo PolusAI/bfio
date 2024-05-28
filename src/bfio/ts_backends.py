@@ -10,7 +10,7 @@ import ome_types
 from xml.etree import ElementTree as ET
 
 
-from bfiocpp import TSReader, Seq, FileType
+from bfiocpp import TSReader, Seq, FileType, get_ome_xml
 import bfio.base_classes
 from bfio.utils import clean_ome_xml_for_known_issues
 import zarr
@@ -185,12 +185,12 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
         if self._metadata is None:
             try:
                 self._metadata = ome_types.from_xml(
-                    self._rdr.get_ome_metadata(), validate=False
+                    get_ome_xml(str(self.frontend._file_path)), validate=False
                 )
             except (ET.ParseError, ValueError):
                 if self.frontend.clean_metadata:
                     cleaned = clean_ome_xml_for_known_issues(
-                        self._rdr.get_ome_metadata()
+                        get_ome_xml(str(self.frontend._file_path))
                     )
                     self._metadata = ome_types.from_xml(cleaned, validate=False)
                     self.logger.warning(

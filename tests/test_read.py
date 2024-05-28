@@ -338,6 +338,50 @@ class TestZarrReader(unittest.TestCase):
             self.assertEqual(br.shape, (1350, 1351, 1, 27))
 
 
+class TestZarrTSReader(unittest.TestCase):
+    def test_get_dims(self):
+        """Testing metadata dimension attributes"""
+        with bfio.BioReader(
+            TEST_DIR.joinpath("4d_array.zarr"), backend="tensorstore"
+        ) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (512, 672, 21, 3))
+
+    def test_get_pixel_size(self):
+        """Testing metadata pixel sizes"""
+        with bfio.BioReader(
+            TEST_DIR.joinpath("4d_array.zarr"), backend="tensorstore"
+        ) as br:
+            get_pixel_size(br)
+
+    def test_get_pixel_info(self):
+        """Testing metadata pixel information"""
+        with bfio.BioReader(
+            TEST_DIR.joinpath("4d_array.zarr"), backend="tensorstore"
+        ) as br:
+            get_pixel_info(br)
+
+    def test_get_channel_names(self):
+        """Testing metadata channel names"""
+        with bfio.BioReader(
+            TEST_DIR.joinpath("4d_array.zarr"), backend="tensorstore"
+        ) as br:
+            get_channel_names(br)
+
+    def test_sub_resolution_read(self):
+        """Testing multi-resolution read"""
+        with bfio.BioReader(
+            TEST_DIR.joinpath("5025551.zarr"), backend="tensorstore"
+        ) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (2700, 2702, 1, 27))
+        with bfio.BioReader(
+            TEST_DIR.joinpath("5025551.zarr"), backend="tensorstore", level=1
+        ) as br:
+            get_dims(br)
+            self.assertEqual(br.shape, (1350, 1351, 1, 27))
+
+
 class TestZarrMetadata(unittest.TestCase):
     def test_set_metadata(self):
         """Testing metadata dimension attributes"""
@@ -352,6 +396,27 @@ class TestZarrMetadata(unittest.TestCase):
             bw[:] = image
 
         with bfio.BioReader(TEST_DIR.joinpath("test_cname.ome.zarr")) as br:
+            logger.info(br.cnames)
+            logger.info(br.ps_x)
+            self.assertEqual(br.cnames[0], cname[0])
+
+
+class TestZarrTesnsorstoreMetadata(unittest.TestCase):
+    def test_set_metadata(self):
+        """Testing metadata dimension attributes"""
+        cname = ["test"]
+
+        image = np.load(TEST_DIR.joinpath("4d_array.npy"))
+
+        with bfio.BioWriter(TEST_DIR.joinpath("test_cname.ome.zarr")) as bw:
+            bw.cnames = cname
+            bw.ps_x = (100, "nm")
+            bw.shape = image.shape
+            bw[:] = image
+
+        with bfio.BioReader(
+            TEST_DIR.joinpath("test_cname.ome.zarr"), backend="tensorstore"
+        ) as br:
             logger.info(br.cnames)
             logger.info(br.ps_x)
             self.assertEqual(br.cnames[0], cname[0])
