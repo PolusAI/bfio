@@ -227,13 +227,20 @@ class BioBase(object, metaclass=abc.ABCMeta):
         raise AttributeError(self._READ_ONLY_MESSAGE.format("read_only"))
 
     def __getattribute__(self, name):
+        # delay metadata parsing as long as posible for tensorstore backend
+        if name.lower() == "metadata" and self._metadata is None:
+            self._metadata = self._backend.read_metadata()
         # Get image dimensions using num_x, x, or X
         if len(name) == 1 and name.lower() in "xyzct":
-            if self._metadata is None:
-                self._metadata = self._backend.read_metadata()
-            return getattr(
-                self._metadata.images[0].pixels, "size_{}".format(name.lower())
-            )
+            # for tensorstore, we do not need to parse metadata to get shape
+            if type(self._backend).__name__ == "TensorstoreReader":
+                return getattr(self._backend, name.upper())
+            else:
+                if self._metadata is None:
+                    self._metadata = self._backend.read_metadata()
+                return getattr(
+                    self._metadata.images[0].pixels, "size_{}".format(name.lower())
+                )
         else:
             return object.__getattribute__(self, name)
 
