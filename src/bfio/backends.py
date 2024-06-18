@@ -634,7 +634,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         offsetsize = self._writer.tiff.offsetsize
 
-        self._compresstag = tifffile.TIFF.COMPRESSION.ADOBE_DEFLATE
+        self._compresstag = tifffile.COMPRESSION.ADOBE_DEFLATE
 
         # normalize data shape to 5D or 6D, depending on volume:
         #   (pages, planar_samples, height, width, contig_samples)
@@ -675,7 +675,7 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         self._addtag(258, "H", 1, self._bitspersample)
 
         # PhotometricInterpretation
-        self._addtag(262, "H", 1, tifffile.TIFF.PHOTOMETRIC.MINISBLACK.value)
+        self._addtag(262, "H", 1, tifffile.PHOTOMETRIC.MINISBLACK.value)
 
         if self.frontend.physical_size_x[0] is not None:
             self._addtag(
