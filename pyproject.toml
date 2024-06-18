@@ -5,7 +5,7 @@ requires = [
   "setuptools", 
   "wheel",
   "imagecodecs>=2021.2.26",
-  "numpy",
+  "numpy<2.0.0",
   "ome-types>=0.4.2",
   "zarr>=2.6.1",
   "scyjava",
@@ -21,7 +21,7 @@ name = "bfio"
 dynamic = ["version"]
 dependencies = [
     "imagecodecs>=2021.2.26",
-    "numpy",
+    "numpy<2.0.0",
     "ome-types>=0.4.2",
     "zarr>=2.6.1",
     "scyjava",
