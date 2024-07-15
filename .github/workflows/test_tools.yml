@@ -105,7 +105,7 @@ jobs:
           else
             poetry install
             fi
-          pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+          pip install --upgrade --force-reinstall --find-links=${root_dir}/dist bfio
           poetry run pytest -v
   
   find_tabular_tools:
@@ -180,7 +180,7 @@ jobs:
           else
             poetry install
             fi
-          pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+          pip install --upgrade --force-reinstall --find-links=${root_dir}/dist bfio
           poetry run pytest -v
   
   # TODO: Uncomment tests for mm-tools after the pip package for `cwl_utilities`
@@ -257,5 +257,5 @@ jobs:
   #         else
   #           poetry install
   #           fi
-  #         pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+  #         pip install --upgrade --force-reinstall --find-links=${root_dir}/dist bfio
   #         poetry run pytest -v
