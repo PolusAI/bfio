@@ -101,14 +101,12 @@ jobs:
             source ~/.bashrc
             conda activate project_env
             pip install -e ".[all]"
-            pip install --find-links=${root_dir}/dist bfio
             conda install pytest
-            python -m pytest -v
           else
             poetry install
-            pip install --find-links=${root_dir}/dist bfio
-            poetry run pytest -v
-          fi
+            fi
+          pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+          poetry run pytest -v
   
   find_tabular_tools:
     needs: build_wheels
@@ -178,14 +176,12 @@ jobs:
             source ~/.bashrc
             conda activate project_env
             pip install -e ".[all]"
-            pip install --find-links=${root_dir}/dist bfio
             conda install pytest
-            python -m pytest -v
           else
             poetry install
-            pip install --find-links=${root_dir}/dist bfio
-            poetry run pytest -v
-          fi
+            fi
+          pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+          poetry run pytest -v
   
   # TODO: Uncomment tests for mm-tools after the pip package for `cwl_utilities`
   #       is available on PyPI and the PRs on mm-tools are merged.
@@ -257,11 +253,9 @@ jobs:
   #           source ~/.bashrc
   #           conda activate project_env
   #           pip install -e ".[all]"
-  #           pip install --find-links=${root_dir}/dist bfio
   #           conda install pytest
-  #           python -m pytest -v
   #         else
   #           poetry install
-  #           pip install --find-links=${root_dir}/dist bfio
-  #           poetry run pytest -v
-  #         fi
+  #           fi
+  #         pip install --upgrade --no-deps --force-reinstall --find-links=${root_dir}/dist bfio
+  #         poetry run pytest -v
