@@ -37,13 +37,21 @@ COPY . /bfio_src
 RUN git apply --directory=bfio_src /bfio_src/docker/m2_repo.patch
 
 # Install
-RUN pip3 install /bfio_src --no-cache-dir && \
-    rm -rf /bfio_src
+RUN pip3 install /bfio_src --no-cache-dir
+
+#Apply jgo copy patch
+RUN  git apply  --directory=usr/local/lib/python3.9/dist-packages /bfio_src/docker/jgo_copy.patch
 
 # Install packages
 ENV LIBRARY_PATH=/lib:/usr/lib
 RUN pip3 install cython --no-cache-dir && \
     pip3 install pyimagej==1.4.1 --no-cache-dir
+
+#Apply pyimagej patch
+RUN  git apply  --directory=usr/local/lib/python3.9/dist-packages /bfio_src/docker/pyimagej_m2repo.patch
+
+# clean up
+RUN rm -rf /bfio_src
 
 # Update Maven local repository path
 RUN mkdir -p /usr/share/maven/conf

@@ -31,8 +31,14 @@ COPY . /bfio_src
 RUN git apply --directory=bfio_src /bfio_src/docker/m2_repo.patch
 
 # Install
-RUN pip3 install /bfio_src --no-cache-dir && \
-    rm -rf /bfio_src
+RUN pip3 install /bfio_src --no-cache-dir
+
+#Apply jgo copy patch
+RUN  git apply  --directory=usr/local/lib/python3.10/dist-packages /bfio_src/docker/jgo_copy.patch
+
+# clean up
+RUN rm -rf /bfio_src
+
 
 # Update Maven local repository path
 RUN mkdir -p /usr/share/maven/conf

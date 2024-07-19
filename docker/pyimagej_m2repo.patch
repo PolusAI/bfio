@@ -1,0 +1,12 @@
+diff --git a/imagej/__init__.py b/imagej/__init__.py
+index 18aa9a8..74524ce 100644
+--- a/imagej/__init__.py
++++ b/imagej/__init__.py
+@@ -1421,6 +1421,7 @@ def _create_jvm(
+     sj.config.endpoints.extend(original_endpoints)
+ 
+     try:
++        sj.config.set_m2_repo("/etc/m2/")
+         sj.start_jvm()
+     except subprocess.CalledProcessError as e:
+         # Check to see if initialization failed due to "un-managed"
