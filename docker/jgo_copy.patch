@@ -1,0 +1,13 @@
+diff --git a/jgo/jgo.py b/jgo/jgo.py
+index bd2b328..e2a824a 100644
+--- a/jgo/jgo.py
++++ b/jgo/jgo.py
+@@ -710,7 +710,7 @@ def resolve_dependencies(
+                     jar_file_in_workspace,
+                     link_type=link_type,
+                 )
+-            except FileExistsError:
++            except (FileExistsError, shutil.SameFileError):
+                 # Do not throw exception if target file exists.
+                 pass
+     pathlib.Path(build_success_file).touch(exist_ok=True)
