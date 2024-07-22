@@ -1350,7 +1350,7 @@ class BioWriter(BioBase):
         # Ensure end is not out of boudns
         X_tile_end = min(X_tile_end, self._DIMS["X"])
         Y_tile_end = min(Y_tile_end, self._DIMS["Y"])
-        
+
         # Read the image
         self._backend.write_image(
             [X_tile_start, X_tile_end], [Y_tile_start, Y_tile_end], Z, C, T, image

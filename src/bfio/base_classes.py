@@ -888,6 +888,7 @@ class TSAbstractReader(TSAbstractBackend):
         """Abstract read image executor."""
         pass
 
+
 class TSAbstractWriter(TSAbstractBackend):
     """Base class for file readers.
 

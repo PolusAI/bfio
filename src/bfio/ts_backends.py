@@ -278,69 +278,87 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                 self._metadata = omexml
                 return self._metadata
 
+
 class TensorstoreWriter(bfio.base_classes.TSAbstractWriter):
-        logger = logging.getLogger("bfio.backends.TensorstoreWriter")
+    logger = logging.getLogger("bfio.backends.TensorstoreWriter")
 
-        def __init__(self, frontend):
-            super().__init__(frontend)
-            self._init_writer()
+    def __init__(self, frontend):
 
-        def _init_writer(self):
-            """_init_writer Initializes file writing.
+        super().__init__(frontend)
 
-            This method is called exactly once per object. Once it is called,
-            all other methods of setting metadata will throw an error.
+        self._init_writer()
 
-            NOTE: For Zarr, it is not explicitly necessary to make the file
-                  read-only once writing has begun. Thus functionality is mainly
-                  incorporated to remain consistent with the OME TIFF formats.
-                  In the future, it may be reasonable to not enforce read-only
+    def _init_writer(self):
+        """_init_writer Initializes file writing.
 
-            """
-            if self.frontend._file_path.exists():
-                shutil.rmtree(self.frontend._file_path)
+        This method is called exactly once per object. Once it is called,
+        all other methods of setting metadata will throw an error.
 
-            shape = (
-                self.frontend.T,
-                self.frontend.C,
-                self.frontend.Z,
-                self.frontend.Y,
-                self.frontend.X,
-            )
+        NOTE: For Zarr, it is not explicitly necessary to make the file
+              read-only once writing has begun. Thus functionality is mainly
+              incorporated to remain consistent with the OME TIFF formats.
+              In the future, it may be reasonable to not enforce read-only
 
-            self._writer = TSWriter(str(self.frontend._file_path.resolve()), shape, (1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE), self.frontend.dtype, "TCZYX")
-        
-        def write_metadata(self):
-            # Create the metadata
-            metadata_path = (
-                Path(self.frontend._file_path)
-                .joinpath("OME")
-                .joinpath("METADATA.ome.xml")
-            )
-            metadata_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(metadata_path, "w") as fw:
-                fw.write(str(self.frontend._metadata.to_xml()))
+        """
 
-            # This is recommended to do for cloud storage to increase read/write
-            # speed, but it also increases write speed locally when threading.
-            zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
- 
-        def write_image(self, X, Y, Z, C, T, image):
+        if self.frontend._file_path.exists():
+            shutil.rmtree(self.frontend._file_path)
 
-            cols = Seq(X[0], X[-1] - 1, 1)
-            rows = Seq(Y[0], Y[-1] - 1, 1)
-            layers = Seq(Z[0], Z[-1] - 1, 1)
+        # Tensorstore writer currently only supports zarr
+        if not self._file_path.name.endswith(".zarr"):
+            raise ValueError("File type must be zarr to use tensorstore writer.")
 
-            if len(C) == 1:
-                channels = Seq(C[0], C[0], 1)
-            else:
-                channels = Seq(C[0], C[-1], 1)
-            if len(T) == 1:
-                tsteps = Seq(T[0], T[0], 1)
-            else:
-                tsteps = Seq(T[0], T[-1], 1)
+        shape = (
+            self.frontend.T,
+            self.frontend.C,
+            self.frontend.Z,
+            self.frontend.Y,
+            self.frontend.X,
+        )
 
-            self._writer.write_image_data(image.flatten(), rows, cols, layers, channels, tsteps)
+        self._writer = TSWriter(
+            str(self.frontend._file_path.resolve()),
+            shape,
+            (1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+            self.frontend.dtype,
+            "TCZYX",
+        )
 
-        def close(self):
-            pass
+    def write_metadata(self):
+
+        # Create the metadata
+        metadata_path = (
+            Path(self.frontend._file_path).joinpath("OME").joinpath("METADATA.ome.xml")
+        )
+
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(metadata_path, "w") as fw:
+            fw.write(str(self.frontend._metadata.to_xml()))
+
+        # This is recommended to do for cloud storage to increase read/write
+        # speed, but it also increases write speed locally when threading.
+        zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
+
+    def write_image(self, X, Y, Z, C, T, image):
+
+        cols = Seq(X[0], X[-1] - 1, 1)
+        rows = Seq(Y[0], Y[-1] - 1, 1)
+        layers = Seq(Z[0], Z[-1] - 1, 1)
+
+        if len(C) == 1:
+            channels = Seq(C[0], C[0], 1)
+        else:
+            channels = Seq(C[0], C[-1], 1)
+
+        if len(T) == 1:
+            tsteps = Seq(T[0], T[0], 1)
+        else:
+            tsteps = Seq(T[0], T[-1], 1)
+
+        self._writer.write_image_data(
+            image.flatten(), rows, cols, layers, channels, tsteps
+        )
+
+    def close(self):
+        pass
