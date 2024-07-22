@@ -887,3 +887,33 @@ class TSAbstractReader(TSAbstractBackend):
     def read_image(self, *args):
         """Abstract read image executor."""
         pass
+
+class TSAbstractWriter(TSAbstractBackend):
+    """Base class for file readers.
+
+    All reader objects must be a subclass of AbstractReader.
+    """
+
+    _metadata: ome_types.OME = None
+
+    @abc.abstractmethod
+    def __init__(self, frontend: BioBase):
+        """Initialize the reader object.
+
+        Args:
+            frontend (BioBase): The BioBase object associated with the backend.
+        """
+        super().__init__(frontend)
+
+    @abc.abstractmethod
+    def write_metadata(self):
+        """Read OME metadata from the file.
+
+        Subclasses must override this to properly retrieve and format the data.
+        """
+        pass
+
+    @abc.abstractmethod
+    def write_image(self, *args):
+        """Abstract read image executor."""
+        pass
