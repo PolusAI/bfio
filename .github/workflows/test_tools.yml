@@ -94,6 +94,7 @@ jobs:
             139) echo "::warning::Seg-fault detected in ${{ matrix.tool_name }}. Please check the logs for more information." && exit 0;;
           esac' ERR
 
+          root_dir=$(pwd)
           cd ${{ matrix.tool_dir }}
           
           if [ -f "environment.yml" ]; then
@@ -169,6 +170,7 @@ jobs:
             139) echo "::warning::Seg-fault detected in ${{ matrix.tool_name }}. Please check the logs for more information." && exit 0;;
           esac' ERR
 
+          root_dir=$(pwd)
           cd ${{ matrix.tool_dir }}
           
           if [ -f "environment.yml" ]; then
@@ -246,6 +248,7 @@ jobs:
   #           139) echo "::warning::Seg-fault detected in ${{ matrix.tool_name }}. Please check the logs for more information." && exit 0;;
   #         esac' ERR
 
+  #         root_dir=$(pwd)
   #         cd ${{ matrix.tool_dir }}
           
   #         if [ -f "environment.yml" ]; then
