@@ -12,7 +12,7 @@ import tifffile
 
 from bfio import backends
 from bfio.base_classes import BioBase
-from bfio.ts_backends import TensorstoreReader
+from bfio.ts_backends import TensorstoreReader, TensorstoreWriter
 
 
 class BioReader(BioBase):
@@ -1062,6 +1062,8 @@ class BioWriter(BioBase):
         # Ensure backend is supported
         if self._backend_name == "python":
             self._backend = backends.PythonWriter(self)
+        elif self._backend_name == "tensorstore":
+            self._backend = TensorstoreWriter(self)
         elif self._backend_name == "bioformats":
             try:
                 self._backend = backends.JavaWriter(self)
@@ -1121,9 +1123,11 @@ class BioWriter(BioBase):
             "python",
             "bioformats",
             "zarr",
+            "tensorstore",
         ]:
             raise ValueError(
-                'Keyword argument backend must be one of ["python","bioformats","zarr"]'
+                "Keyword argument backend must be one of "
+                + '["python","bioformats","zarr","tensorstore"]'
             )
         if backend == "python":
             extension = "".join(self._file_path.suffixes)
@@ -1343,6 +1347,11 @@ class BioWriter(BioBase):
         Y_tile_start = (Y[0] // self._TILE_SIZE) * self._TILE_SIZE
         X_tile_end = numpy.ceil(X[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
         Y_tile_end = numpy.ceil(Y[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
+
+        # Ensure end is not out of bounds to avoid tensorstore errors
+        if self._backend_name == "tensorstore":
+            X_tile_end = min(X_tile_end, self._DIMS["X"])
+            Y_tile_end = min(Y_tile_end, self._DIMS["Y"])
 
         # Read the image
         self._backend.write_image(
