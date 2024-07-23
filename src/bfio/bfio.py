@@ -1348,9 +1348,10 @@ class BioWriter(BioBase):
         X_tile_end = numpy.ceil(X[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
         Y_tile_end = numpy.ceil(Y[1] / self._TILE_SIZE).astype(int) * self._TILE_SIZE
 
-        # Ensure end is not out of boudns
-        X_tile_end = min(X_tile_end, self._DIMS["X"])
-        Y_tile_end = min(Y_tile_end, self._DIMS["Y"])
+        # Ensure end is not out of bounds to avoid tensorstore errors
+        if self._backend_name == "tensorstore":
+            X_tile_end = min(X_tile_end, self._DIMS["X"])
+            Y_tile_end = min(Y_tile_end, self._DIMS["Y"])
 
         # Read the image
         self._backend.write_image(
