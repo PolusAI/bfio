@@ -1126,8 +1126,8 @@ class BioWriter(BioBase):
             "tensorstore",
         ]:
             raise ValueError(
-                'Keyword argument backend must be one of ' +
-                '["python","bioformats","zarr","tensorstore"]'
+                "Keyword argument backend must be one of "
+                + '["python","bioformats","zarr","tensorstore"]'
             )
         if backend == "python":
             extension = "".join(self._file_path.suffixes)
