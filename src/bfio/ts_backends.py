@@ -305,7 +305,7 @@ class TensorstoreWriter(bfio.base_classes.TSAbstractWriter):
             shutil.rmtree(self.frontend._file_path)
 
         # Tensorstore writer currently only supports zarr
-        if not self._file_path.name.endswith(".zarr"):
+        if not self.frontend._file_path.name.endswith(".zarr"):
             raise ValueError("File type must be zarr to use tensorstore writer.")
 
         shape = (
