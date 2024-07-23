@@ -890,9 +890,9 @@ class TSAbstractReader(TSAbstractBackend):
 
 
 class TSAbstractWriter(TSAbstractBackend):
-    """Base class for file readers.
+    """Base class for file writers.
 
-    All reader objects must be a subclass of AbstractReader.
+    All writer objects must be a subclass of AbstractWriter.
     """
 
     _metadata: ome_types.OME = None
