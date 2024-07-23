@@ -43,11 +43,11 @@ def setUpModule():
                 shutil.rmtree(TEST_DIR.joinpath(file))
             zarr_download(url, str(TEST_DIR))
 
-# def tearDownModule():
-#     """Remove test images"""
+def tearDownModule():
+    """Remove test images"""
 
-#     logger.info("teardown - Removing test images...")
-#     shutil.rmtree(TEST_DIR)
+    logger.info("teardown - Removing test images...")
+    shutil.rmtree(TEST_DIR)
 
 class TestOmeTiffWrite(unittest.TestCase):
     @classmethod
