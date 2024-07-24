@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # import core packages
+import json
 import logging
 from pathlib import Path
 from typing import Dict
@@ -317,12 +318,14 @@ class TensorstoreWriter(bfio.base_classes.TSAbstractWriter):
         )
 
         self._writer = TSWriter(
-            str(self.frontend._file_path.resolve()),
+            str(self.frontend._file_path.joinpath("0").resolve()),
             shape,
             (1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
             self.frontend.dtype,
             "TCZYX",
         )
+
+        self.write_metadata()
 
     def write_metadata(self):
 
@@ -335,6 +338,22 @@ class TensorstoreWriter(bfio.base_classes.TSAbstractWriter):
 
         with open(metadata_path, "w") as fw:
             fw.write(str(self.frontend._metadata.to_xml()))
+
+        with open(self.frontend._file_path.joinpath(".zgroup"), "w") as f:
+            f.write('{\n\t"zarr_format": 2\n}')
+
+        zarr_attrs = {
+            "multiscales": [
+                {
+                    "version": "0.1",
+                    "name": self.frontend._file_path.name,
+                    "datasets": [{"path": "0"}],
+                    "metadata": {"method": "mean"},
+                }
+            ]
+        }
+        with open(self.frontend._file_path.joinpath(".zattrs"), "w") as f:
+            json.dump(zarr_attrs, f, indent=4)
 
         # This is recommended to do for cloud storage to increase read/write
         # speed, but it also increases write speed locally when threading.
