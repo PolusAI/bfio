@@ -9,6 +9,7 @@ from ome_zarr.utils import download as zarr_download
 TEST_IMAGES = {
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
+    "0.tif": "https://osf.io/j6aer/download",
 }
 
 TEST_DIR = pathlib.Path(__file__).with_name("data")
@@ -43,11 +44,13 @@ def setUpModule():
                 shutil.rmtree(TEST_DIR.joinpath(file))
             zarr_download(url, str(TEST_DIR))
 
+
 def tearDownModule():
     """Remove test images"""
 
     logger.info("teardown - Removing test images...")
     shutil.rmtree(TEST_DIR)
+
 
 class TestOmeTiffWrite(unittest.TestCase):
     @classmethod
@@ -110,25 +113,46 @@ class TestOmeZarrWriter(unittest.TestCase):
 
             actual_shape = br.shape
             actual_dtype = br.dtype
-            
             actual_image = br[:]
-            
             actual_mdata = br.metadata
-        
         with tempfile.TemporaryDirectory() as dir:
 
             # Use the temporary directory
-            test_file_path = os.path.join(dir, 'out/test.ome.zarr')
+            test_file_path = os.path.join(dir, "out/test.ome.zarr")
 
-            with bfio.BioWriter(test_file_path, metadata=actual_mdata, backend="tensorstore") as bw:
+            with bfio.BioWriter(
+                test_file_path, metadata=actual_mdata, backend="tensorstore"
+            ) as bw:
 
                 expanded = np.expand_dims(actual_image, axis=-1)
                 bw[:] = expanded
 
             with bfio.BioReader(test_file_path) as br:
 
-
                 assert br.shape == actual_shape
                 assert br.dtype == actual_dtype
 
                 assert br[:].sum() == actual_image.sum()
+
+    def test_overwrite_metadata(self):
+
+        with bfio.BioReader(str(TEST_DIR.joinpath("0.tif"))) as br:
+            with tempfile.TemporaryDirectory() as dir:
+
+                # Use the temporary directory
+                test_file_path = os.path.join(dir, "out/0.ome.zarr")
+
+                with bfio.BioWriter(
+                    test_file_path,
+                    metadata=br.metadata,
+                    backend="tensorstore",
+                    Z=br.Z * 2,
+                ) as bw:
+
+                    bw[:, :, 0, :, :] = br[:]
+                    bw[:, :, 1, :, :] = br[:]
+
+                    bw_z_dim = bw.Z
+
+                with bfio.BioReader(test_file_path) as br2:
+                    assert br2.Z == bw_z_dim
