@@ -1046,11 +1046,11 @@ class BioWriter(BioBase):
             if kwargs:
                 for k, v in kwargs.items():
                     setattr(self, k, v)
-                    if  k in ("YXZCT"):
+                    if k in ("YXZCT"):
                         setattr(
-                            self._metadata.images[0].pixels, 
-                            "size_{}".format(k.lower()), 
-                            v
+                            self._metadata.images[0].pixels,
+                            "size_{}".format(k.lower()),
+                            v,
                         )
 
         else:
