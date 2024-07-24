@@ -1042,6 +1042,17 @@ class BioWriter(BioBase):
             self._metadata.images[0].pixels.dimension_order = (
                 ome_types.model.Pixels_DimensionOrder.XYZCT
             )
+            # overwrite values in metadata if explicitly specified in the constructor
+            if kwargs:
+                for k, v in kwargs.items():
+                    setattr(self, k, v)
+                    if  k in ("YXZCT"):
+                        setattr(
+                            self._metadata.images[0].pixels, 
+                            "size_{}".format(k.lower()), 
+                            v
+                        )
+
         else:
             self._metadata = self._minimal_xml()
 
