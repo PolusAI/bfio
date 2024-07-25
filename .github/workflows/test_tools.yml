@@ -95,6 +95,8 @@ jobs:
           esac' ERR
 
           root_dir=$(pwd)
+          bfio_wheel=$(ls ${root_dir}/dist/bfio*.whl)
+          echo "Installing bfio from ${bfio_wheel}"
           cd ${{ matrix.tool_dir }}
           
           if [ -f "environment.yml" ]; then
@@ -106,7 +108,9 @@ jobs:
           else
             poetry install
             fi
-          pip install --force-reinstall --find-links=${root_dir}/dist bfio
+          poetry remove bfio
+          poetry add "numpy<2.0"
+          poetry add "${bfio_wheel}[all]"
           poetry run pytest -v
   
   find_tabular_tools:
@@ -182,7 +186,9 @@ jobs:
           else
             poetry install
             fi
-          pip install --force-reinstall --find-links=${root_dir}/dist bfio
+          poetry remove bfio
+          poetry add "numpy<2.0"
+          poetry add "${bfio_wheel}[all]"
           poetry run pytest -v
   
   # TODO: Uncomment tests for mm-tools after the pip package for `cwl_utilities`
