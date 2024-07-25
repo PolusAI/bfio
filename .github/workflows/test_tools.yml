@@ -108,7 +108,6 @@ jobs:
           else
             poetry install
             fi
-          poetry remove bfio
           poetry add "numpy<2.0"
           poetry add "${bfio_wheel}[all]"
           poetry run pytest -v
@@ -186,7 +185,6 @@ jobs:
           else
             poetry install
             fi
-          poetry remove bfio
           poetry add "numpy<2.0"
           poetry add "${bfio_wheel}[all]"
           poetry run pytest -v
