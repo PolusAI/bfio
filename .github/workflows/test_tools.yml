@@ -34,7 +34,7 @@ jobs:
   find_image_tools:
     needs: build_wheels
     name: Find Image Tools
-    uses: PolusAI/image-tools/.github/workflows/find-all-tools.yml@master
+    uses: nishaq503/image-tools/.github/workflows/find-all-tools.yml@fix/typo
 
   image-tests:
     name: Images | ${{ matrix.tool_name }}
@@ -47,8 +47,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: 'PolusAI/image-tools'
-          ref: "master"
+          repository: 'nishaq503/image-tools'
+          ref: "fix/typo"
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
@@ -115,7 +115,7 @@ jobs:
   find_tabular_tools:
     needs: build_wheels
     name: Find Tabular Tools
-    uses: PolusAI/tabular-tools/.github/workflows/find-all-tools.yml@main
+    uses: nishaq503/tabular-tools/.github/workflows/find-all-tools.yml@fix/typo
 
   tabular-tests:
     name: Tabular | ${{ matrix.tool_name }}
@@ -128,7 +128,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: 'PolusAI/tabular-tools'
+          repository: 'nishaq503/tabular-tools'
+          ref: "fix/typo"
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
