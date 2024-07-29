@@ -1405,8 +1405,9 @@ try:
                   In the future, it may be reasonable to not enforce read-only
 
             """
-            if self.frontend._file_path.exists():
-                shutil.rmtree(self.frontend._file_path)
+            if self.frontend.append == False:
+                if self.frontend._file_path.exists():
+                    shutil.rmtree(self.frontend._file_path)
 
             shape = (
                 self.frontend.T,
@@ -1417,8 +1418,10 @@ try:
             )
 
             compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
-
-            self._root = zarr.group(store=str(self.frontend._file_path.resolve()))
+            mode = "w"
+            if self.frontend.append == True:
+                mode = "a"
+            self._root = zarr.open_group(store=str(self.frontend._file_path.resolve()), mode=mode)
 
             # Create the metadata
             metadata_path = (
@@ -1438,14 +1441,24 @@ try:
                     "metadata": {"method": "mean"},
                 }
             ]
-
-            writer = self._root.zeros(
-                "0",
-                shape=shape,
-                chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
-                dtype=self.frontend.dtype,
-                compressor=compressor,
-            )
+            if self.frontend.append == True:    
+                print("Append option selected")                        
+                writer = self._root.create(
+                    "0",
+                    shape=shape,
+                    chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+                    dtype=self.frontend.dtype,
+                    compressor=compressor,
+                    overwrite=False,
+                )   
+            else: 
+                writer = self._root.zeros(
+                    "0",
+                    shape=shape,
+                    chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+                    dtype=self.frontend.dtype,
+                    compressor=compressor,
+                )
 
             # This is recommended to do for cloud storage to increase read/write
             # speed, but it also increases write speed locally when threading.
