@@ -1424,33 +1424,26 @@ try:
             self._root = zarr.open_group(store=str(self.frontend._file_path.resolve()), mode=mode)
 
             # Create the metadata
-            metadata_path = (
-                Path(self.frontend._file_path)
-                .joinpath("OME")
-                .joinpath("METADATA.ome.xml")
-            )
-            metadata_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(metadata_path, "w") as fw:
-                fw.write(str(self.frontend._metadata.to_xml()))
+            if self.frontend.append != True:
+                metadata_path = (
+                    Path(self.frontend._file_path)
+                    .joinpath("OME")
+                    .joinpath("METADATA.ome.xml")
+                )
+                metadata_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(metadata_path, "w") as fw:
+                    fw.write(str(self.frontend._metadata.to_xml()))
 
-            self._root.attrs["multiscales"] = [
-                {
-                    "version": "0.1",
-                    "name": self.frontend._file_path.name,
-                    "datasets": [{"path": "0"}],
-                    "metadata": {"method": "mean"},
-                }
-            ]
+                self._root.attrs["multiscales"] = [
+                    {
+                        "version": "0.1",
+                        "name": self.frontend._file_path.name,
+                        "datasets": [{"path": "0"}],
+                        "metadata": {"method": "mean"},
+                    }
+                ]
             if self.frontend.append == True:    
-                print("Append option selected")                        
-                writer = self._root.create(
-                    "0",
-                    shape=shape,
-                    chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
-                    dtype=self.frontend.dtype,
-                    compressor=compressor,
-                    overwrite=False,
-                )   
+                writer = self._root["0"]                     
             else: 
                 writer = self._root.zeros(
                     "0",
@@ -1462,7 +1455,8 @@ try:
 
             # This is recommended to do for cloud storage to increase read/write
             # speed, but it also increases write speed locally when threading.
-            zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
+            if self.frontend.append != True:
+                zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
 
             self._writer = writer
 
