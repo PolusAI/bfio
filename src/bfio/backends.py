@@ -1405,7 +1405,7 @@ try:
                   In the future, it may be reasonable to not enforce read-only
 
             """
-            if self.frontend.append == False:
+            if self.frontend.append is False:
                 if self.frontend._file_path.exists():
                     shutil.rmtree(self.frontend._file_path)
 
@@ -1419,7 +1419,7 @@ try:
 
             compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
             mode = "w"
-            if self.frontend.append == True:
+            if self.frontend.append is True:
                 mode = "a"
             self._root = zarr.open_group(
                 store=str(self.frontend._file_path.resolve()), mode=mode
@@ -1432,8 +1432,8 @@ try:
                 .joinpath("METADATA.ome.xml")
             )
 
-            if self.frontend.append == False or (
-                self.frontend.append == True and metadata_path.exists() == False
+            if self.frontend.append is False or (
+                self.frontend.append is True and metadata_path.exists() is False
             ):
                 metadata_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(metadata_path, "w") as fw:
@@ -1448,7 +1448,7 @@ try:
                     }
                 ]
             if (
-                self.frontend.append == True
+                self.frontend.append is True
                 and len(sorted(self._root.array_keys())) > 0
             ):
                 writer = self._root["0"]
@@ -1473,9 +1473,9 @@ try:
             consolidated_metadata_file = Path(self.frontend._file_path).joinpath(
                 ".zmetadata"
             )
-            if self.frontend.append == False or (
-                self.frontend.append == True
-                and consolidated_metadata_file.exists() == False
+            if self.frontend.append is False or (
+                self.frontend.append is True
+                and consolidated_metadata_file.exists() is False
             ):
                 zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
 

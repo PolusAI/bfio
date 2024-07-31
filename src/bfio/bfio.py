@@ -1073,7 +1073,7 @@ class BioWriter(BioBase):
         self.set_backend(backend)
         self.append = False
         if kwargs and "append" in kwargs:
-            if kwargs["append"] == True:
+            if kwargs["append"] is True:
                 self.append = True
 
         # Ensure backend is supported
