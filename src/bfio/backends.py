@@ -617,7 +617,15 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             f"Image:{Path(self.frontend._file_path).name}"
         )
 
-        if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
+        if (
+            self.frontend.X
+            * self.frontend.Y
+            * self.frontend.Z
+            * self.frontend.C
+            * self.frontend.T
+            * self.frontend.bpp
+            > 2**31
+        ):
             big_tiff = True
         else:
             big_tiff = False
