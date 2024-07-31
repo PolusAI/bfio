@@ -91,7 +91,6 @@ class TestOmeTiffWrite(unittest.TestCase):
             assert image.shape == br.shape
             assert np.array_equal(image[:], br[:])
 
-    @unittest.skipIf(sys.platform.startswith("darwin"), "Does not work in Mac")
     def test_write_java(self):
         with bfio.BioWriter("4d_array_bf.ome.tif", backend="bioformats") as bw:
             image = np.load(TEST_DIR.joinpath("4d_array.npy"))
