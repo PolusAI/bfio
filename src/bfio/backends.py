@@ -1421,15 +1421,20 @@ try:
             mode = "w"
             if self.frontend.append == True:
                 mode = "a"
-            self._root = zarr.open_group(store=str(self.frontend._file_path.resolve()), mode=mode)
+            self._root = zarr.open_group(
+                store=str(self.frontend._file_path.resolve()), mode=mode
+            )
 
             # Create the metadata
-            if self.frontend.append != True:
-                metadata_path = (
-                    Path(self.frontend._file_path)
-                    .joinpath("OME")
-                    .joinpath("METADATA.ome.xml")
-                )
+            metadata_path = (
+                Path(self.frontend._file_path)
+                .joinpath("OME")
+                .joinpath("METADATA.ome.xml")
+            )
+
+            if self.frontend.append == False or (
+                self.frontend.append == True and metadata_path.exists() == False
+            ):
                 metadata_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(metadata_path, "w") as fw:
                     fw.write(str(self.frontend._metadata.to_xml()))
@@ -1442,20 +1447,36 @@ try:
                         "metadata": {"method": "mean"},
                     }
                 ]
-            if self.frontend.append == True:    
-                writer = self._root["0"]                     
-            else: 
+            if (
+                self.frontend.append == True
+                and len(sorted(self._root.array_keys())) > 0
+            ):
+                writer = self._root["0"]
+            else:
                 writer = self._root.zeros(
                     "0",
                     shape=shape,
-                    chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
+                    chunks=(
+                        1,
+                        1,
+                        1,
+                        self.frontend._TILE_SIZE,
+                        self.frontend._TILE_SIZE,
+                    ),
                     dtype=self.frontend.dtype,
                     compressor=compressor,
+                    dimension_separator="/",
                 )
 
             # This is recommended to do for cloud storage to increase read/write
             # speed, but it also increases write speed locally when threading.
-            if self.frontend.append != True:
+            consolidated_metadata_file = Path(self.frontend._file_path).joinpath(
+                ".zmetadata"
+            )
+            if self.frontend.append == False or (
+                self.frontend.append == True
+                and consolidated_metadata_file.exists() == False
+            ):
                 zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
 
             self._writer = writer
