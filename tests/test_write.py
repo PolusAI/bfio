@@ -118,8 +118,7 @@ class TestPythonZarrWriter(unittest.TestCase):
             print(br.shape)
         with tempfile.TemporaryDirectory() as dir:
 
-            # Use the temporary directory
-            test_file_path = str(TEST_DIR.joinpath("out/test.ome.zarr"))
+            test_file_path = os.path.join(dir, "out/test.ome.zarr")
 
             with bfio.BioWriter(
                 test_file_path, metadata=actual_mdata, backend="zarr", append=True
@@ -145,8 +144,7 @@ class TestPythonZarrWriter(unittest.TestCase):
             actual_mdata = br.metadata
         with tempfile.TemporaryDirectory() as dir:
 
-            # Use the temporary directory
-            test_file_path = str(TEST_DIR.joinpath("out/test.ome.zarr"))
+            test_file_path = os.path.join(dir, "out/test.ome.zarr")
 
             with bfio.BioWriter(
                 test_file_path, metadata=actual_mdata, backend="zarr"
