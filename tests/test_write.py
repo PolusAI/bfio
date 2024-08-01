@@ -105,6 +105,68 @@ class TestOmeTiffWrite(unittest.TestCase):
             assert np.array_equal(image[:], br[:])
 
 
+class TestPythonZarrWriter(unittest.TestCase):
+
+    def test_write_zarr_append_no_file(self):
+
+        with bfio.BioReader(str(TEST_DIR.joinpath("5025551.zarr"))) as br:
+
+            actual_shape = br.shape
+            actual_dtype = br.dtype
+            actual_image = br[:]
+            actual_mdata = br.metadata
+            print(br.shape)
+        with tempfile.TemporaryDirectory() as dir:
+
+            test_file_path = os.path.join(dir, "out/test.ome.zarr")
+
+            with bfio.BioWriter(
+                test_file_path, metadata=actual_mdata, backend="zarr", append=True
+            ) as bw:
+
+                expanded = np.expand_dims(actual_image, axis=-1)
+                bw[:, :, :, :, :] = expanded[:, :, :, :, :]
+
+            with bfio.BioReader(test_file_path) as br:
+
+                assert br.shape == actual_shape
+                assert br.dtype == actual_dtype
+
+                assert br[:].sum() == actual_image.sum()
+
+    def test_write_zarr_append_file_exist(self):
+
+        with bfio.BioReader(str(TEST_DIR.joinpath("5025551.zarr"))) as br:
+
+            actual_shape = br.shape
+            actual_dtype = br.dtype
+            actual_image = br[:]
+            actual_mdata = br.metadata
+        with tempfile.TemporaryDirectory() as dir:
+
+            test_file_path = os.path.join(dir, "out/test.ome.zarr")
+
+            with bfio.BioWriter(
+                test_file_path, metadata=actual_mdata, backend="zarr"
+            ) as bw:
+
+                expanded = np.expand_dims(actual_image, axis=-1)
+                bw[:, :, :, 0:13, :] = expanded[:, :, :, 0:13, :]
+
+            with bfio.BioWriter(
+                test_file_path, metadata=actual_mdata, backend="zarr", append=True
+            ) as bw:
+
+                expanded = np.expand_dims(actual_image, axis=-1)
+                bw[:, :, :, 13:, :] = expanded[:, :, :, 13:, :]
+            with bfio.BioReader(test_file_path) as br:
+
+                assert br.shape == actual_shape
+                assert br.dtype == actual_dtype
+
+                assert br[:].sum() == actual_image.sum()
+
+
 class TestOmeZarrWriter(unittest.TestCase):
 
     def test_write_zarr_tensorstore(self):

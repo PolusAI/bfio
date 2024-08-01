@@ -52,6 +52,7 @@ class BioReader(BioBase):
         "_read_only",
         "_backend",
         "level",
+        "append",
     ]
 
     def __init__(
@@ -1070,6 +1071,11 @@ class BioWriter(BioBase):
                     setattr(self, k, v)
 
         self.set_backend(backend)
+        self.append = False
+        if kwargs and "append" in kwargs:
+            if kwargs["append"] is True:
+                self.append = True
+
         # Ensure backend is supported
         if self._backend_name == "python":
             self._backend = backends.PythonWriter(self)

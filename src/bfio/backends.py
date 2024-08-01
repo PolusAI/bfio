@@ -617,7 +617,15 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
             f"Image:{Path(self.frontend._file_path).name}"
         )
 
-        if self.frontend.X * self.frontend.Y * self.frontend.bpp > 2**31:
+        if (
+            self.frontend.X
+            * self.frontend.Y
+            * self.frontend.Z
+            * self.frontend.C
+            * self.frontend.T
+            * self.frontend.bpp
+            > 2**31
+        ):
             big_tiff = True
         else:
             big_tiff = False
@@ -1405,8 +1413,9 @@ try:
                   In the future, it may be reasonable to not enforce read-only
 
             """
-            if self.frontend._file_path.exists():
-                shutil.rmtree(self.frontend._file_path)
+            if self.frontend.append is False:
+                if self.frontend._file_path.exists():
+                    shutil.rmtree(self.frontend._file_path)
 
             shape = (
                 self.frontend.T,
@@ -1417,8 +1426,12 @@ try:
             )
 
             compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
-
-            self._root = zarr.group(store=str(self.frontend._file_path.resolve()))
+            mode = "w"
+            if self.frontend.append is True:
+                mode = "a"
+            self._root = zarr.open_group(
+                store=str(self.frontend._file_path.resolve()), mode=mode
+            )
 
             # Create the metadata
             metadata_path = (
@@ -1426,30 +1439,53 @@ try:
                 .joinpath("OME")
                 .joinpath("METADATA.ome.xml")
             )
-            metadata_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(metadata_path, "w") as fw:
-                fw.write(str(self.frontend._metadata.to_xml()))
 
-            self._root.attrs["multiscales"] = [
-                {
-                    "version": "0.1",
-                    "name": self.frontend._file_path.name,
-                    "datasets": [{"path": "0"}],
-                    "metadata": {"method": "mean"},
-                }
-            ]
+            if self.frontend.append is False or (
+                self.frontend.append is True and metadata_path.exists() is False
+            ):
+                metadata_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(metadata_path, "w") as fw:
+                    fw.write(str(self.frontend._metadata.to_xml()))
 
-            writer = self._root.zeros(
-                "0",
-                shape=shape,
-                chunks=(1, 1, 1, self.frontend._TILE_SIZE, self.frontend._TILE_SIZE),
-                dtype=self.frontend.dtype,
-                compressor=compressor,
-            )
+                self._root.attrs["multiscales"] = [
+                    {
+                        "version": "0.1",
+                        "name": self.frontend._file_path.name,
+                        "datasets": [{"path": "0"}],
+                        "metadata": {"method": "mean"},
+                    }
+                ]
+            if (
+                self.frontend.append is True
+                and len(sorted(self._root.array_keys())) > 0
+            ):
+                writer = self._root["0"]
+            else:
+                writer = self._root.zeros(
+                    "0",
+                    shape=shape,
+                    chunks=(
+                        1,
+                        1,
+                        1,
+                        self.frontend._TILE_SIZE,
+                        self.frontend._TILE_SIZE,
+                    ),
+                    dtype=self.frontend.dtype,
+                    compressor=compressor,
+                    dimension_separator="/",
+                )
 
             # This is recommended to do for cloud storage to increase read/write
             # speed, but it also increases write speed locally when threading.
-            zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
+            consolidated_metadata_file = Path(self.frontend._file_path).joinpath(
+                ".zmetadata"
+            )
+            if self.frontend.append is False or (
+                self.frontend.append is True
+                and consolidated_metadata_file.exists() is False
+            ):
+                zarr.consolidate_metadata(str(self.frontend._file_path.resolve()))
 
             self._writer = writer
 
