@@ -43,16 +43,15 @@ class BioReader(BioBase):
 
     logger = logging.getLogger("bfio.bfio.BioReader")
     _STATE_DICT = [
+        "level",
         "_metadata",
         "_DIMS",
         "_file_path",
-        "max_workers",
+        "_max_workers",
         "_backend_name",
         "clean_metadata",
         "_read_only",
-        "_backend",
-        "level",
-        "append",
+        "_backend"
     ]
 
     def __init__(
@@ -234,7 +233,15 @@ class BioReader(BioBase):
         self._backend_name = backend.lower()
 
     def __getstate__(self) -> typing.Dict:
-        state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
+        if self._backend_name == "bioformats":
+            state_dict = {}
+            for n in self._STATE_DICT:
+                if n == "_backend":
+                    state_dict[n] = "JavaReaderDummy"
+                else:
+                    state_dict[n] = getattr(self, n) 
+        else:
+            state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
 
         return state_dict
 
@@ -243,7 +250,10 @@ class BioReader(BioBase):
         assert all(n in state.keys() for n in self._STATE_DICT)
 
         for k, v in state.items():
-            setattr(self, k, v)
+            if k == "_backend" and v == "JavaReaderDummy":
+                self._backend = backends.JavaReader(self)
+            else:
+                setattr(self, k, v)
 
         self._backend.frontend = self
 
