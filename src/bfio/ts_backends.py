@@ -23,7 +23,19 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
 
     _rdr = None
     _offsets_bytes = None
-    _STATE_DICT = ["_metadata", "frontend"]
+    _STATE_DICT = [
+        "_metadata",
+        "frontend",
+        "X",
+        "Y",
+        "Z",
+        "C",
+        "T",
+        "data_type",
+        "_file_path",
+        "_file_type",
+        "_axes_list",
+    ]
 
     def __init__(self, frontend):
         super().__init__(frontend)
@@ -33,7 +45,8 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
         if extension.endswith(".ome.tif") or extension.endswith(".ome.tiff"):
             # # check if it satisfies all the condition for python backend
             self._file_type = FileType.OmeTiff
-            self._rdr = TSReader(str(self.frontend._file_path), FileType.OmeTiff, "")
+            self._file_path = str(self.frontend._file_path.resolve())
+            self._axes_list = ""
         elif extension.endswith(".zarr"):
             # if path exists, make sure it is a directory
             if not Path.is_dir(self.frontend._file_path):
@@ -41,10 +54,10 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
                     "this filetype is not supported by tensorstore backend"
                 )
             else:
-                zarr_path, axes_list = self.get_zarr_array_info()
+                self._file_path, self._axes_list = self.get_zarr_array_info()
                 self._file_type = FileType.OmeZarr
-                self._rdr = TSReader(zarr_path, FileType.OmeZarr, axes_list)
 
+        self._rdr = TSReader(self._file_path, self._file_type, self._axes_list)
         self.X = self._rdr._X
         self.Y = self._rdr._Y
         self.Z = self._rdr._Z
@@ -141,16 +154,13 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
 
     def __getstate__(self) -> Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
-        state_dict.update({"file_path": self.frontend._file_path})
 
         return state_dict
 
     def __setstate__(self, state) -> None:
         for k, v in state.items():
-            if k == "file_path":
-                pass
-            else:
-                setattr(self, k, v)
+            setattr(self, k, v)
+        self._rdr = TSReader(self._file_path, self._file_type, self._axes_list)
 
     def read_metadata(self):
 
