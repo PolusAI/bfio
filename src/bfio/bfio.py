@@ -51,7 +51,7 @@ class BioReader(BioBase):
         "_backend_name",
         "clean_metadata",
         "_read_only",
-        "_backend"
+        "_backend",
     ]
 
     def __init__(
@@ -239,7 +239,7 @@ class BioReader(BioBase):
                 if n == "_backend":
                     state_dict[n] = "JavaReaderDummy"
                 else:
-                    state_dict[n] = getattr(self, n) 
+                    state_dict[n] = getattr(self, n)
         else:
             state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
 

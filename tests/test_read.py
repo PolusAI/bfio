@@ -422,6 +422,7 @@ class TestZarrTesnsorstoreMetadata(unittest.TestCase):
             logger.info(br.ps_x)
             self.assertEqual(br.cnames[0], cname[0])
 
+
 class TestBioReaderPickle(unittest.TestCase):
     def test_python_backend_pickle(self):
         # create a 2D numpy array filled with random integer form 0-255
@@ -430,7 +431,7 @@ class TestBioReaderPickle(unittest.TestCase):
         source_data = np.random.randint(
             0, 256, (img_height, img_width), dtype=np.uint16
         )
-        
+
         with bfio.BioWriter(
             str(TEST_DIR.joinpath("radnom_image.ome.tiff")),
             X=img_width,
@@ -438,7 +439,7 @@ class TestBioReaderPickle(unittest.TestCase):
             dtype=np.uint16,
         ) as bw:
             bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
-        
+
         br = bfio.BioReader(str(TEST_DIR.joinpath("radnom_image.ome.tiff")))
         br.close()
         pickled_rdr = pickle.dumps(br)
@@ -451,11 +452,11 @@ class TestBioReaderPickle(unittest.TestCase):
     def test_bioformats_backend_pickle(self):
 
         br = bfio.BioReader(str(TEST_DIR.joinpath("img_r001_c001.ome.tif")))
-        img_height = br.Y 
-        img_width = br.X 
+        img_height = br.Y
+        img_width = br.X
         data_sum = br[:].sum()
         br.close()
-        
+
         pickled_rdr = pickle.dumps(br)
         unpickled_rdr = pickle.loads(pickled_rdr)
 

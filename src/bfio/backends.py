@@ -122,7 +122,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
     def __getstate__(self) -> Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
         state_dict.update({"file_path": self.frontend._file_path})
-        state_dict.update({"level":self.frontend.level})
+        state_dict.update({"level": self.frontend.level})
 
         return state_dict
 
@@ -138,7 +138,7 @@ class PythonReader(bfio.base_classes.AbstractReader):
         self._rdr_pages = self._rdr.pages
         if state["level"] is not None:
             if len(self._rdr.series) != 0:
-                series = self._rdr.series[0]                    
+                series = self._rdr.series[0]
                 self._rdr_pages = series.levels[state["level"]]
         self._rdr.filehandle.close()
 
