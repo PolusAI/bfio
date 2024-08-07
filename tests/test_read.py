@@ -3,6 +3,7 @@ import unittest
 import requests, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
+import pickle
 import random
 import zarr
 from ome_zarr.utils import download as zarr_download
@@ -420,3 +421,44 @@ class TestZarrTesnsorstoreMetadata(unittest.TestCase):
             logger.info(br.cnames)
             logger.info(br.ps_x)
             self.assertEqual(br.cnames[0], cname[0])
+
+class TestBioReaderPickle(unittest.TestCase):
+    def test_python_backend_pickle(self):
+        # create a 2D numpy array filled with random integer form 0-255
+        img_height = 1024
+        img_width = 1024
+        source_data = np.random.randint(
+            0, 256, (img_height, img_width), dtype=np.uint16
+        )
+        
+        with bfio.BioWriter(
+            str(TEST_DIR.joinpath("radnom_image.ome.tiff")),
+            X=img_width,
+            Y=img_height,
+            dtype=np.uint16,
+        ) as bw:
+            bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
+        
+        br = bfio.BioReader(str(TEST_DIR.joinpath("radnom_image.ome.tiff")))
+        br.close()
+        pickled_rdr = pickle.dumps(br)
+        unpickled_rdr = pickle.loads(pickled_rdr)
+
+        assert unpickled_rdr.X == img_width
+        assert unpickled_rdr.Y == img_height
+        assert unpickled_rdr[:].sum() == source_data.sum()
+
+    def test_bioformats_backend_pickle(self):
+
+        br = bfio.BioReader(str(TEST_DIR.joinpath("img_r001_c001.ome.tif")))
+        img_height = br.Y 
+        img_width = br.X 
+        data_sum = br[:].sum()
+        br.close()
+        
+        pickled_rdr = pickle.dumps(br)
+        unpickled_rdr = pickle.loads(pickled_rdr)
+
+        assert unpickled_rdr.X == img_width
+        assert unpickled_rdr.Y == img_height
+        assert unpickled_rdr[:].sum() == data_sum
