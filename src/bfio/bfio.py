@@ -249,13 +249,17 @@ class BioReader(BioBase):
         assert all(n in self._STATE_DICT for n in state.keys())
         assert all(n in state.keys() for n in self._STATE_DICT)
 
+        bioformats_backend = False
         for k, v in state.items():
             if k == "_backend" and v == "JavaReaderDummy":
-                self._backend = backends.JavaReader(self)
+                bioformats_backend = True
             else:
                 setattr(self, k, v)
 
-        self._backend.frontend = self
+        if bioformats_backend:
+            self._backend = backends.JavaReader(self)
+        else:
+            self._backend.frontend = self
 
     def __getitem__(self, keys: typing.Union[tuple, slice]) -> numpy.ndarray:
         """Image loading using numpy-like indexing.
