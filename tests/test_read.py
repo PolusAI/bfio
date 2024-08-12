@@ -3,6 +3,7 @@ import unittest
 import requests, pathlib, shutil, logging, sys
 import bfio
 import numpy as np
+import pickle
 import random
 import zarr
 from ome_zarr.utils import download as zarr_download
@@ -63,6 +64,19 @@ def setUpModule():
             for c in range(br.C):
                 for z in range(br.Z):
                     zf[t, c, z, :, :] = br[:, :, z, c, t]
+
+    # create a 2D numpy array filled with random integer form 0-255
+    img_height = 8000
+    img_width = 7500
+    source_data = np.random.randint(0, 256, (img_height, img_width), dtype=np.uint16)
+    np.save(TEST_DIR.joinpath("random_image.npy"), source_data)
+    with bfio.BioWriter(
+        str(TEST_DIR.joinpath("random_image.ome.tiff")),
+        X=img_width,
+        Y=img_height,
+        dtype=np.uint16,
+    ) as bw:
+        bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
 
 
 def tearDownModule():
@@ -141,24 +155,10 @@ class TestSimpleRead(unittest.TestCase):
             I = br[:]
 
     def test_read_unaligned_tile_boundary_python(self):
-        # create a 2D numpy array filled with random integer form 0-255
-        img_height = 8000
-        img_width = 7500
-        source_data = np.random.randint(
-            0, 256, (img_height, img_width), dtype=np.uint16
-        )
-        with bfio.BioWriter(
-            str(TEST_DIR.joinpath("test_output.ome.tiff")),
-            X=img_width,
-            Y=img_height,
-            dtype=np.uint16,
-        ) as bw:
-            bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
-
+        source_data = np.load(TEST_DIR.joinpath("random_image.npy"))
         x_max = source_data.shape[0]
         y_max = source_data.shape[1]
-
-        with bfio.BioReader(str(TEST_DIR.joinpath("test_output.ome.tiff"))) as test_br:
+        with bfio.BioReader(str(TEST_DIR.joinpath("random_image.ome.tiff"))) as br:
             for i in range(100):
                 x_start = random.randint(0, x_max)
                 y_start = random.randint(0, y_max)
@@ -167,39 +167,25 @@ class TestSimpleRead(unittest.TestCase):
 
                 x_end = x_start + x_step
                 y_end = y_start + y_step
-
                 if x_end > x_max:
                     x_end = x_max
 
                 if y_end > y_max:
                     y_end = y_max
 
-                test_data = test_br[x_start:x_end, y_start:y_end, ...]
+                test_data = br[x_start:x_end, y_start:y_end, ...]
                 assert (
                     np.sum(source_data[x_start:x_end, y_start:y_end] - test_data) == 0
                 )
 
     def test_read_unaligned_tile_boundary_tensorstore(self):
-        # create a 2D numpy array filled with random integer form 0-255
-        img_height = 8000
-        img_width = 7500
-        source_data = np.random.randint(
-            0, 256, (img_height, img_width), dtype=np.uint16
-        )
-        with bfio.BioWriter(
-            str(TEST_DIR.joinpath("test_output.ome.tiff")),
-            X=img_width,
-            Y=img_height,
-            dtype=np.uint16,
-        ) as bw:
-            bw[0:img_height, 0:img_width, 0, 0, 0] = source_data
 
+        source_data = np.load(TEST_DIR.joinpath("random_image.npy"))
         x_max = source_data.shape[0]
         y_max = source_data.shape[1]
-
         with bfio.BioReader(
-            str(TEST_DIR.joinpath("test_output.ome.tiff")), backend="tensorstore"
-        ) as test_br:
+            str(TEST_DIR.joinpath("random_image.ome.tiff")), backend="tensorstore"
+        ) as br:
             for i in range(100):
                 x_start = random.randint(0, x_max)
                 y_start = random.randint(0, y_max)
@@ -208,14 +194,13 @@ class TestSimpleRead(unittest.TestCase):
 
                 x_end = x_start + x_step
                 y_end = y_start + y_step
-
                 if x_end > x_max:
                     x_end = x_max
 
                 if y_end > y_max:
                     y_end = y_max
 
-                test_data = test_br[x_start:x_end, y_start:y_end, ...]
+                test_data = br[x_start:x_end, y_start:y_end, ...]
                 assert (
                     np.sum(source_data[x_start:x_end, y_start:y_end] - test_data) == 0
                 )
@@ -304,6 +289,21 @@ class TestJavaReader(unittest.TestCase):
         with bfio.BioReader(TEST_DIR.joinpath("Leica-1.scn"), level=1) as br:
             get_dims(br)
             self.assertEqual(br.shape, (1167, 404, 1, 3))
+
+    def test_bioformats_backend_pickle(self):
+
+        br = bfio.BioReader(str(TEST_DIR.joinpath("img_r001_c001.ome.tif")))
+        img_height = br.Y
+        img_width = br.X
+        data_sum = br[:].sum()
+        pickled_rdr = pickle.dumps(br)
+        br.close()
+        unpickled_rdr = pickle.loads(pickled_rdr)
+
+        assert unpickled_rdr.X == img_width
+        assert unpickled_rdr.Y == img_height
+        assert unpickled_rdr[:].sum() == data_sum
+        unpickled_rdr.close()
 
 
 class TestZarrReader(unittest.TestCase):
@@ -420,3 +420,40 @@ class TestZarrTesnsorstoreMetadata(unittest.TestCase):
             logger.info(br.cnames)
             logger.info(br.ps_x)
             self.assertEqual(br.cnames[0], cname[0])
+
+
+class TestBioReaderPickle(unittest.TestCase):
+
+    def test_python_backend_pickle(self):
+
+        br = bfio.BioReader(
+            str(TEST_DIR.joinpath("random_image.ome.tiff")), backend="python"
+        )
+        img_height = br.Y
+        img_width = br.X
+        data_sum = br[:].sum()
+        pickled_rdr = pickle.dumps(br)
+        br.close()
+        unpickled_rdr = pickle.loads(pickled_rdr)
+
+        assert unpickled_rdr.X == img_width
+        assert unpickled_rdr.Y == img_height
+        assert unpickled_rdr[:].sum() == data_sum
+        unpickled_rdr.close()
+
+    def test_tensorstore_backend_pickle(self):
+
+        br = bfio.BioReader(
+            str(TEST_DIR.joinpath("random_image.ome.tiff")), backend="tensorstore"
+        )
+        img_height = br.Y
+        img_width = br.X
+        data_sum = br[:].sum()
+        pickled_rdr = pickle.dumps(br)
+        br.close()
+        unpickled_rdr = pickle.loads(pickled_rdr)
+
+        assert unpickled_rdr.X == img_width
+        assert unpickled_rdr.Y == img_height
+        assert unpickled_rdr[:].sum() == data_sum
+        unpickled_rdr.close()

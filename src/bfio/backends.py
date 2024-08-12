@@ -122,17 +122,25 @@ class PythonReader(bfio.base_classes.AbstractReader):
     def __getstate__(self) -> Dict:
         state_dict = {n: getattr(self, n) for n in self._STATE_DICT}
         state_dict.update({"file_path": self.frontend._file_path})
+        state_dict.update({"level": self.frontend.level})
 
         return state_dict
 
     def __setstate__(self, state) -> None:
         for k, v in state.items():
-            if k == "file_path":
-                self._lock = threading.Lock()
-                self._rdr = tifffile.TiffFile(v)
-                self._rdr.filehandle.close()
+            if k == "file_path" or k == "level":
+                pass
             else:
                 setattr(self, k, v)
+
+        self._lock = threading.Lock()
+        self._rdr = tifffile.TiffFile(state["file_path"])
+        self._rdr_pages = self._rdr.pages
+        if state["level"] is not None:
+            if len(self._rdr.series) != 0:
+                series = self._rdr.series[0]
+                self._rdr_pages = series.levels[state["level"]]
+        self._rdr.filehandle.close()
 
     def read_metadata(self):
         self.logger.debug("read_metadata(): Reading metadata...")
