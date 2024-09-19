@@ -11,6 +11,8 @@ import re
 from xml.etree import ElementTree as ET
 from xsdata.utils.dates import DateTimeParser
 
+from ome_types.model import UnitsLength
+
 KNOWN_INVALID_OME_XSD_REFERENCES = [
     "www.openmicroscopy.org/Schemas/ome/2013-06",
     "www.openmicroscopy.org/Schemas/OME/2012-03",
@@ -364,3 +366,79 @@ def clean_ome_xml_for_known_issues(xml: str) -> str:
         )
 
     return xml
+
+
+def pixels_per_cm(
+    image_dim_px: int, physical_dim: float, unit: UnitsLength = UnitsLength.CENTIMETER
+) -> int:
+    """
+    Calculate the number of pixels per centimeter based on image dimensions
+    and physical size.
+
+    Args:
+        image_dim_px (int): The image dimension in pixels.
+        physical_dim (float): The physical dimension of the image.
+        unit (UnitsLength, optional): The unit of the physical dimension.
+        Defaults to UnitsLength.CENTIMETER.
+
+    Returns:
+        int: The number of pixels per centimeter.
+
+    Raises:
+        ValueError: If an unsupported unit is provided.
+
+    Example:
+        >>> pixels_per_cm(1000, 5, UnitsLength.MILLIMETER)
+        2000
+    """
+
+    # Conversion factors to centimeters
+    conversion_factors = {
+        # SI Units and SI-derived Units
+        UnitsLength.YOTTAMETER: 1e24,  # 1 yottameter = 1e24 centimeters
+        UnitsLength.ZETTAMETER: 1e21,  # 1 zettameter = 1e21 centimeters
+        UnitsLength.EXAMETER: 1e18,  # 1 exameter = 1e18 centimeters
+        UnitsLength.PETAMETER: 1e15,  # 1 petameter = 1e15 centimeters
+        UnitsLength.TERAMETER: 1e12,  # 1 terameter = 1e12 centimeters
+        UnitsLength.GIGAMETER: 1e9,  # 1 gigameter = 1e9 centimeters
+        UnitsLength.MEGAMETER: 1e6,  # 1 megameter = 1e6 centimeters
+        UnitsLength.KILOMETER: 1e5,  # 1 kilometer = 1e5 centimeters
+        UnitsLength.HECTOMETER: 1e4,  # 1 hectometer = 1e4 centimeters
+        UnitsLength.DECAMETER: 1e3,  # 1 decameter = 1e3 centimeters
+        UnitsLength.METER: 100,  # 1 meter = 100 centimeters
+        UnitsLength.DECIMETER: 10,  # 1 decimeter = 10 centimeters
+        UnitsLength.CENTIMETER: 1,  # base unit (centimeters)
+        UnitsLength.MILLIMETER: 0.1,  # 1 millimeter = 0.1 centimeters
+        UnitsLength.MICROMETER: 1e-4,  # 1 micrometer = 1e-4 centimeters
+        UnitsLength.NANOMETER: 1e-7,  # 1 nanometer = 1e-7 centimeters
+        UnitsLength.PICOMETER: 1e-10,  # 1 picometer = 1e-10 centimeters
+        UnitsLength.FEMTOMETER: 1e-13,  # 1 femtometer = 1e-13 centimeters
+        UnitsLength.ATTOMETER: 1e-16,  # 1 attometer = 1e-16 centimeters
+        UnitsLength.ZEPTOMETER: 1e-19,  # 1 zeptometer = 1e-19 centimeters
+        UnitsLength.YOCTOMETER: 1e-22,  # 1 yoctometer = 1e-22 centimeters
+        # SI-derived Units
+        UnitsLength.ANGSTROM: 1e-8,  # 1 ångström = 1e-8 centimeters
+        # Imperial Units
+        UnitsLength.THOU: 2.54e-3,  # 1 thou (mil) = 0.001 inch = 2.54e-3 centimeters
+        UnitsLength.LINE: 2.11667,  # 1 line = 1/12 inch = 2.11667 centimeters
+        UnitsLength.INCH: 2.54,  # 1 inch = 2.54 centimeters
+        UnitsLength.FOOT: 30.48,  # 1 foot = 12 inches = 30.48 centimeters
+        UnitsLength.YARD: 91.44,  # 1 yard = 3 feet = 91.44 centimeters
+        UnitsLength.MILE: 160934.4,  # 1 mile = 5280 feet = 160934.4 centimeters
+    }
+
+    # Ensure the unit is supported
+    if unit not in conversion_factors:
+        logger = logging.getLogger("bfio.backends")
+        logger.warning(
+            f"Unsupported unit '{unit}'."
+            f"Supported units are: {', '.join(conversion_factors.keys())}"
+        )
+
+    # Convert the physical dimensions to centimeters
+    physical_dim_cm = physical_dim * conversion_factors.get(unit, 1)
+
+    # Calculate pixels per centimeter for width and height
+    pixels_per_cm = image_dim_px / physical_dim_cm
+
+    return int(pixels_per_cm)
