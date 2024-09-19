@@ -638,8 +638,16 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         else:
             big_tiff = False
 
+        if self.frontend._metadata.images[0].pixels.big_endian:
+            byte_order = ">"
+        else:
+            byte_order = "<"
+
         self._writer = tifffile.TiffWriter(
-            self.frontend._file_path, bigtiff=big_tiff, append=False
+            self.frontend._file_path,
+            bigtiff=big_tiff,
+            byteorder=byte_order,
+            append=False,
         )
 
         self._byteorder = self._writer.tiff.byteorder
