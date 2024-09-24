@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 # bfio internals
 from bfio import __version__ as version
 import bfio.base_classes
-from bfio.utils import start, clean_ome_xml_for_known_issues
+from bfio.utils import start, clean_ome_xml_for_known_issues, pixels_per_cm
 
 logging.basicConfig(
     format="%(asctime)s - %(name)-8s - %(levelname)-8s - %(message)s",
@@ -638,8 +638,16 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
         else:
             big_tiff = False
 
+        if self.frontend._metadata.images[0].pixels.big_endian:
+            byte_order = ">"
+        else:
+            byte_order = "<"
+
         self._writer = tifffile.TiffWriter(
-            self.frontend._file_path, bigtiff=big_tiff, append=False
+            self.frontend._file_path,
+            bigtiff=big_tiff,
+            byteorder=byte_order,
+            append=False,
         )
 
         self._byteorder = self._writer.tiff.byteorder
@@ -695,10 +703,28 @@ class PythonWriter(bfio.base_classes.AbstractWriter):
 
         if self.frontend.physical_size_x[0] is not None:
             self._addtag(
-                282, "2I", 1, rational(10000 / self.frontend.physical_size_x[0])
+                282,
+                "2I",
+                1,
+                rational(
+                    pixels_per_cm(
+                        self.frontend.X,
+                        self.frontend.physical_size_x[0],
+                        self.frontend.physical_size_x[1],
+                    )
+                ),
             )  # XResolution in pixels/cm
             self._addtag(
-                283, "2I", 1, rational(10000 / self.frontend.physical_size_y[0])
+                283,
+                "2I",
+                1,
+                rational(
+                    pixels_per_cm(
+                        self.frontend.Y,
+                        self.frontend.physical_size_y[0],
+                        self.frontend.physical_size_y[1],
+                    )
+                ),
             )  # YResolution in pixels/cm
             self._addtag(296, "H", 1, 3)  # ResolutionUnit = cm
         else:
