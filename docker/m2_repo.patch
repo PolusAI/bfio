@@ -5,7 +5,7 @@ index 954d682..cb88332 100644
 @@ -40,6 +40,8 @@ try:
  
          global JAR_VERSION
-         scyjava.config.endpoints.append("ome:formats-gpl:7.3.0")
+         scyjava.config.endpoints.append("ome:formats-gpl:8.0.0")
 +        scyjava.config.set_m2_repo("/etc/m2/")
 +        scyjava.config.set_cache_dir("/etc/m2/jgo_cache")
          scyjava.start_jvm()

@@ -26,4 +26,4 @@ Here are some info on installing Maven on various OS (`Windows <https://phoenixn
 
 
 NOTE: ``Bio-Formats`` is licensed under GPL, while ``bfio`` is licensed under MIT. This may have consequences when packaging any software that uses
-``bfio`` as a dependency. During the first invocation of ``bfio``, ``scyjava`` will try to download ``Bio-Formats`` package from the Maven repository. The current version of ``bfio`` uses ``Bio-Formats`` v7.3.0 .
+``bfio`` as a dependency. During the first invocation of ``bfio``, ``scyjava`` will try to download ``Bio-Formats`` package from the Maven repository. The current version of ``bfio`` uses ``Bio-Formats`` v8.0.0 .
