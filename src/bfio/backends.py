@@ -988,17 +988,7 @@ try:
 
         def _read_image(self, X, Y, Z, C, T, output):
             out = self._image
-            pseudo_interleaved = any(
-                channel.samples_per_pixel > 1
-                for channel in self.frontend.metadata.images[0].pixels.channels
-            )
-
-            interleaved = False
-            if (
-                self.frontend.metadata.images[0].pixels.interleaved
-                or pseudo_interleaved
-            ):
-                interleaved = True
+            interleaved = self.frontend.metadata.images[0].pixels.interleaved
 
             self._prev_read_cached_loc = None
             self._cached_read_data = None
