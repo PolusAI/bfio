@@ -5,6 +5,8 @@ import bfio
 import numpy as np
 import pickle
 import random
+import tifffile
+from PIL import Image
 import zarr
 from ome_zarr.utils import download as zarr_download
 
@@ -457,3 +459,37 @@ class TestBioReaderPickle(unittest.TestCase):
         assert unpickled_rdr.Y == img_height
         assert unpickled_rdr[:].sum() == data_sum
         unpickled_rdr.close()
+
+
+class TestMultiChannelBioformats(unittest.TestCase):
+
+    def test_multi_channel_bioformats(self):
+
+        # Set image dimensions
+        width, height = 256, 256
+
+        # Create random 3-channel image data
+        random_image_data = np.random.randint(
+            0, 256, (height, width, 3), dtype=np.uint8
+        )
+
+        # Save interleaved TIFF (RGBRGB...)
+        interleaved_image = Image.fromarray(random_image_data, mode="RGB")
+        interleaved_image.save(TEST_DIR.joinpath("interleaved.tiff"))
+
+        # Create non-interleaved data (separate planes for R, G, B)
+        non_interleaved_data = np.moveaxis(
+            random_image_data, 2, 0
+        )  # Shape: (3, height, width)
+
+        # Save non-interleaved TIFF
+        with tifffile.TiffWriter(TEST_DIR.joinpath("non_interleaved.tiff")) as tif:
+            tif.write(non_interleaved_data, photometric="rgb")
+
+        with bfio.BioReader(TEST_DIR.joinpath("non_interleaved.tiff")) as br:
+            for c in range(br.C):
+                assert (br[:, :, :, c] - random_image_data[:, :, c]).sum() == 0
+
+        with bfio.BioReader(TEST_DIR.joinpath("interleaved.tiff")) as br:
+            for c in range(br.C):
+                assert (br[:, :, :, c] - non_interleaved_data[c, :, :]).sum() == 0
