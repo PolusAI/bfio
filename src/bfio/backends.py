@@ -1023,7 +1023,10 @@ try:
                                 # information once.
 
                                 # For now, we are adding some basic caching
-                                if self._rdr.getFormat() not in ["Zeiss CZI"]:
+                                if self._rdr.getFormat() not in [
+                                    "Zeiss CZI",
+                                    "Zeiss Vision Image (ZVI)",
+                                ]:
                                     if interleaved:
                                         image = image[c :: self.frontend.spp]
                                         image = image.reshape(y_range, x_range)
