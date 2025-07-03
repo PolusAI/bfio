@@ -8,7 +8,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Tuple
 import threading
-from jpype import JBoolean
 
 # Third party packages
 import imagecodecs
@@ -1047,7 +1046,7 @@ try:
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr is not None:
-                self._rdr.close(JBoolean(False))
+                self._rdr.close(False)
 
         def __del__(self):
             self.close()
