@@ -87,7 +87,7 @@ namespaces = false
 
 
 [tool.bumpversion]
-current_version = "2.4.7"
+current_version = "2.4.8-dev0"
 commit = true
 tag = true
 commit_args = "--no-verify"
