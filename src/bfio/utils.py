@@ -417,7 +417,8 @@ def pixels_per_cm(
         UnitsLength.ZEPTOMETER: 1e-19,  # 1 zeptometer = 1e-19 centimeters
         UnitsLength.YOCTOMETER: 1e-22,  # 1 yoctometer = 1e-22 centimeters
         # SI-derived Units
-        UnitsLength.LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE: 1e-8,  # 1 ångström = 1e-8 centimeters
+        # 1 ångström = 1e-8 centimeters
+        UnitsLength.LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE: 1e-8,  
         # Imperial Units
         UnitsLength.THOU: 2.54e-3,  # 1 thou (mil) = 0.001 inch = 2.54e-3 centimeters
         UnitsLength.LINE: 2.11667,  # 1 line = 1/12 inch = 2.11667 centimeters
