@@ -68,20 +68,39 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
     def get_zarr_array_info(self):
         self.logger.debug(f"Level is {self.frontend.level}")
 
+        # Detect zarr version
+        zarr_version = int(zarr.__version__.split('.')[0])
+        self.logger.debug(f"Zarr version: {zarr.__version__}")
+
         root = None
         root_path = self.frontend._file_path
         try:
-            root = zarr.open(str(root_path.resolve()), mode="r")
-        except zarr.errors.PathNotFoundError:
+            if zarr_version >= 3:
+                root = zarr.open_group(str(root_path.resolve()), mode="r")
+            else:
+                root = zarr.open(str(root_path.resolve()), mode="r")
+        except Exception:
             # a workaround for pre-compute slide output directory structure
+            # Handle both zarr v2 and v3 exceptions
             root_path = self.frontend._file_path / "data.zarr"
-            root = zarr.open(root_path.resolve(), mode="r")
+            if zarr_version >= 3:
+                root = zarr.open_group(str(root_path.resolve()), mode="r")
+            else:
+                root = zarr.open(str(root_path.resolve()), mode="r")
+
+        # Check type compatibility for both zarr v2 and v3
+        if zarr_version >= 3:
+            is_array = isinstance(root, zarr.Array)
+            is_group = isinstance(root, zarr.Group)
+        else:
+            is_array = isinstance(root, zarr.core.Array)
+            is_group = isinstance(root, zarr.hierarchy.Group)
 
         axes_list = ""
         if self.frontend.level is None:
-            if isinstance(root, zarr.core.Array):
+            if is_array:
                 return str(root_path.resolve()), axes_list
-            elif isinstance(root, zarr.hierarchy.Group):
+            elif is_group:
                 #  the top level is a group, check if this has any arrays
                 num_arrays = len(sorted(root.array_keys()))
                 if num_arrays > 0:
@@ -120,13 +139,13 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
             else:
                 return str(root_path.resolve()), axes_list
         else:
-            if isinstance(root, zarr.core.Array):
+            if is_array:
                 self.close()
                 raise ValueError(
                     "Level is specified but the zarr file does not contain "
                     + "multiple resoulutions."
                 )
-            elif isinstance(root, zarr.hierarchy.Group):
+            elif is_group:
                 if len(sorted(root.array_keys())) > self.frontend.level:
                     root_path = root_path / str(self.frontend.level)
                     try:

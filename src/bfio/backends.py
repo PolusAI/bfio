@@ -1220,19 +1220,44 @@ try:
             self.logger.debug("__init__(): Initializing _rdr (zarr)...")
             self.logger.debug(f"Level is {self.frontend.level}")
 
+            # Detect zarr version
+            self._zarr_version = int(zarr.__version__.split('.')[0])
+            self.logger.debug(f"Zarr version: {zarr.__version__}")
+
             try:
-                self._root = zarr.open(
-                    str(self.frontend._file_path.resolve()), mode="r"
-                )
-            except zarr.errors.PathNotFoundError:
+                if self._zarr_version >= 3:
+                    # Zarr v3 API
+                    self._root = zarr.open_group(
+                        str(self.frontend._file_path.resolve()), mode="r"
+                    )
+                else:
+                    # Zarr v2 API
+                    self._root = zarr.open(
+                        str(self.frontend._file_path.resolve()), mode="r"
+                    )
+            except Exception as e:
                 # a workaround for pre-compute slide output directory structure
+                # Handle both zarr v2 (PathNotFoundError) and v3 exceptions
                 data_zarr_path = str(self.frontend._file_path.resolve()) + "/data.zarr"
-                self._root = zarr.open(data_zarr_path, mode="r")
+                if self._zarr_version >= 3:
+                    self._root = zarr.open_group(data_zarr_path, mode="r")
+                else:
+                    self._root = zarr.open(data_zarr_path, mode="r")
+
+            # Check type compatibility for both zarr v2 and v3
+            if self._zarr_version >= 3:
+                # Zarr v3 uses zarr.Array and zarr.Group
+                is_array = isinstance(self._root, zarr.Array)
+                is_group = isinstance(self._root, zarr.Group)
+            else:
+                # Zarr v2 uses zarr.core.Array and zarr.hierarchy.Group
+                is_array = isinstance(self._root, zarr.core.Array)
+                is_group = isinstance(self._root, zarr.hierarchy.Group)
 
             if self.frontend.level is None:
-                if isinstance(self._root, zarr.core.Array):
+                if is_array:
                     self._rdr = self._root
-                elif isinstance(self._root, zarr.hierarchy.Group):
+                elif is_group:
                     # the top level is a group, check if this has any arrays
                     num_arrays = len(sorted(self._root.array_keys()))
                     if num_arrays > 0:
@@ -1244,13 +1269,13 @@ try:
                 else:
                     pass
             else:
-                if isinstance(self._root, zarr.core.Array):
+                if is_array:
                     self.close()
                     raise ValueError(
                         "Level is specified but the zarr file does not contain "
                         + "multiple resoulutions."
                     )
-                elif isinstance(self._root, zarr.hierarchy.Group):
+                elif is_group:
                     if len(sorted(self._root.array_keys())) > self.frontend.level:
                         self._rdr = self._root[self.frontend.level]
                     else:
@@ -1427,6 +1452,9 @@ try:
 
         def __init__(self, frontend):
             super().__init__(frontend)
+            # Detect zarr version
+            self._zarr_version = int(zarr.__version__.split('.')[0])
+            self.logger.debug(f"Zarr version: {zarr.__version__}")
 
         def _init_writer(self):
             """_init_writer Initializes file writing.
@@ -1452,13 +1480,30 @@ try:
                 self.frontend.X,
             )
 
-            compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
+            # Compression setup differs between zarr v2 and v3
+            if self._zarr_version >= 3:
+                # Zarr v3 uses codec chains
+                from zarr.codecs import ZstdCodec, BytesCodec
+                compressor = None  # Will use codecs parameter instead
+                codecs_chain = [BytesCodec(), ZstdCodec(level=1)]
+            else:
+                # Zarr v2 uses numcodecs compressor
+                compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
+                codecs_chain = None
+            
             mode = "w"
             if self.frontend.append is True:
                 mode = "a"
-            self._root = zarr.open_group(
-                store=str(self.frontend._file_path.resolve()), mode=mode
-            )
+            
+            # Use appropriate API based on zarr version
+            if self._zarr_version >= 3:
+                self._root = zarr.open_group(
+                    store=str(self.frontend._file_path.resolve()), mode=mode
+                )
+            else:
+                self._root = zarr.open_group(
+                    store=str(self.frontend._file_path.resolve()), mode=mode
+                )
 
             # Create the metadata
             metadata_path = (
@@ -1488,20 +1533,31 @@ try:
             ):
                 writer = self._root["0"]
             else:
-                writer = self._root.zeros(
-                    "0",
-                    shape=shape,
-                    chunks=(
+                # API differs between zarr v2 and v3
+                chunk_config = {
+                    "shape": shape,
+                    "chunks": (
                         1,
                         1,
                         1,
                         self.frontend._TILE_SIZE,
                         self.frontend._TILE_SIZE,
                     ),
-                    dtype=self.frontend.dtype,
-                    compressor=compressor,
-                    dimension_separator="/",
-                )
+                    "dtype": self.frontend.dtype,
+                }
+                
+                if self._zarr_version >= 3:
+                    # Zarr v3 uses chunk_key_encoding instead of dimension_separator
+                    # and codecs instead of compressor
+                    from zarr.core.chunk_key_encodings import DefaultChunkKeyEncoding
+                    chunk_config["chunk_key_encoding"] = DefaultChunkKeyEncoding(separator="/")
+                    chunk_config["codecs"] = codecs_chain
+                    writer = self._root.zeros(name="0", **chunk_config)
+                else:
+                    # Zarr v2 uses dimension_separator and compressor
+                    chunk_config["dimension_separator"] = "/"
+                    chunk_config["compressor"] = compressor
+                    writer = self._root.zeros("0", **chunk_config)
 
             # This is recommended to do for cloud storage to increase read/write
             # speed, but it also increases write speed locally when threading.
