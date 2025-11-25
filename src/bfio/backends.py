@@ -1502,7 +1502,7 @@ try:
                     store=str(self.frontend._file_path.resolve()), mode=mode
                 )
             else:
-                self._root = zarr.open_group(
+                self._root = zarr.open(
                     store=str(self.frontend._file_path.resolve()), mode=mode
                 )
 
