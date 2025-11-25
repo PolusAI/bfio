@@ -1235,7 +1235,7 @@ try:
                     self._root = zarr.open(
                         str(self.frontend._file_path.resolve()), mode="r"
                     )
-            except Exception as e:
+            except Exception:
                 # a workaround for pre-compute slide output directory structure
                 # Handle both zarr v2 (PathNotFoundError) and v3 exceptions
                 data_zarr_path = str(self.frontend._file_path.resolve()) + "/data.zarr"
