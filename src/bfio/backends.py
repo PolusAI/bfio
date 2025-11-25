@@ -1049,7 +1049,7 @@ try:
 
         def close(self):
             if jpype.isJVMStarted() and self._rdr is not None:
-                self._rdr.close()
+                self._rdr.close(False)
 
         def __del__(self):
             self.close()

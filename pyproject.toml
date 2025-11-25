@@ -9,7 +9,7 @@ requires = [
   "ome-types>=0.6.2",
   "zarr>=2.6.1,<3",
   "scyjava",
-  "jpype1",
+  "jpype1<1.5.1",
   "tifffile>=2022.8.12",
   "bfiocpp"
 ]
@@ -25,7 +25,7 @@ dependencies = [
     "ome-types>=0.6.2",
     "zarr>=2.6.1,<3",
     "scyjava",
-    "jpype1",
+    "jpype1<1.5.1",
     "tifffile>=2022.8.12",
     "bfiocpp"
 ]
