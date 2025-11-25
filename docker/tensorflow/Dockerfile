@@ -1,5 +1,6 @@
 # Get Linux
-FROM tensorflow/tensorflow:2.13.0-gpu
+# this image comes with Python 3.11 
+FROM tensorflow/tensorflow:2.15.0-gpu
 
 # Polus platform file extension
 ENV POLUS_IMG_EXT=".ome.tif"
@@ -11,6 +12,8 @@ ENV POLUS_LOG="INFO"
 # Data and code directories
 ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
+
+ARG PYTHON_VERSION=3.11
 
 RUN mkdir ${EXEC_DIR} && \
     mkdir ${DATA_DIR} && \
@@ -35,7 +38,7 @@ RUN git apply --directory=bfio_src /bfio_src/docker/m2_repo.patch
 RUN pip3 install /bfio_src --no-cache-dir
 
 #Apply jgo copy patch
-RUN  git apply  --directory=usr/local/lib/python3.8/dist-packages /bfio_src/docker/jgo_copy.patch
+RUN  git apply  --directory=usr/local/lib/python${PYTHON_VERSION}/dist-packages /bfio_src/docker/jgo_copy.patch
 
 # clean up
 RUN rm -rf /bfio_src

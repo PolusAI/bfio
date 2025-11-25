@@ -1,10 +1,11 @@
-# Get Linux
-FROM maven:3.8.6-jdk-11-slim
+# Get Linux with Python 3.11
+# this is more lightweight than maven:3.9.x-openjdk 
+FROM python:3.11-slim
 
 # Polus platform file extension
+ENV DEBIAN_FRONTEND=noninteractive
 ENV POLUS_IMG_EXT=".ome.tif"
 ENV POLUS_TAB_EXT=".csv"
-
 # Container log level
 ENV POLUS_LOG="INFO"
 
@@ -12,23 +13,27 @@ ENV POLUS_LOG="INFO"
 ENV EXEC_DIR="/opt/executables"
 ENV DATA_DIR="/data"
 
+# global variable for just for paths
+ARG PYTHON_VERSION=3.11
+
 RUN mkdir ${EXEC_DIR} && \
     mkdir ${DATA_DIR} && \
     mkdir /bfio_src
 
-
-# Install Python
+# --------------------------------------------------
+# Install system deps: Java 11, Maven, git
+# --------------------------------------------------
 RUN apt update && \
-    apt install software-properties-common -y && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt install python3.9 python3.9-distutils curl git -y && \
-    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
-    python3.9 get-pip.py && \
+    apt install -y \
+        default-jdk \
+        maven \
+        git && \
     apt autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ln -sf /usr/bin/python3.9 /usr/bin/python3
 
+
+RUN python3 -m pip install --upgrade pip --no-cache-dir
 
 # Copy the source
 COPY . /bfio_src
@@ -37,30 +42,36 @@ COPY . /bfio_src
 RUN git apply --directory=bfio_src /bfio_src/docker/m2_repo.patch
 
 # Install
-RUN pip3 install /bfio_src --no-cache-dir
+RUN python3 -m pip install /bfio_src --no-cache-dir
 
 #Apply jgo copy patch
-RUN  git apply  --directory=usr/local/lib/python3.9/dist-packages /bfio_src/docker/jgo_copy.patch
+RUN git apply \
+    --directory=usr/local/lib/python${PYTHON_VERSION}/site-packages \
+    /bfio_src/docker/jgo_copy.patch
 
 # Install packages
 ENV LIBRARY_PATH=/lib:/usr/lib
+
 RUN pip3 install cython --no-cache-dir && \
-    pip3 install pyimagej==1.4.1 --no-cache-dir
+    pip3 install pyimagej==1.7.0 --no-cache-dir
 
 #Apply pyimagej patch
-RUN  git apply  --directory=usr/local/lib/python3.9/dist-packages /bfio_src/docker/pyimagej_m2repo.patch
+RUN git apply \
+    --directory=usr/local/lib/python${PYTHON_VERSION}/site-packages \
+    /bfio_src/docker/pyimagej_m2repo.patch
 
 # clean up
 RUN rm -rf /bfio_src
 
 # Update Maven local repository path
-RUN mkdir -p /usr/share/maven/conf
-RUN echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" ' \
-     'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' \
-     'xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 ' \
-     'http://maven.apache.org/xsd/settings-1.0.0.xsd">' \
-     '<localRepository>/etc/m2</localRepository>' \
-     '</settings>' > /usr/share/maven/conf/settings.xml
+RUN mkdir -p /usr/share/maven/conf && \
+    echo '<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 \
+          http://maven.apache.org/xsd/settings-1.0.0.xsd"> \
+          <localRepository>/etc/m2</localRepository> \
+          </settings>' \
+          > /usr/share/maven/conf/settings.xml
 
 # Ensure the /etc/m2 directory exists
 RUN mkdir -p /etc/m2
