@@ -1221,7 +1221,7 @@ try:
             self.logger.debug(f"Level is {self.frontend.level}")
 
             # Detect zarr version
-            self._zarr_version = int(zarr.__version__.split('.')[0])
+            self._zarr_version = int(zarr.__version__.split(".")[0])
             self.logger.debug(f"Zarr version: {zarr.__version__}")
 
             try:
@@ -1453,7 +1453,7 @@ try:
         def __init__(self, frontend):
             super().__init__(frontend)
             # Detect zarr version
-            self._zarr_version = int(zarr.__version__.split('.')[0])
+            self._zarr_version = int(zarr.__version__.split(".")[0])
             self.logger.debug(f"Zarr version: {zarr.__version__}")
 
         def _init_writer(self):
@@ -1484,17 +1484,18 @@ try:
             if self._zarr_version >= 3:
                 # Zarr v3 uses codec chains
                 from zarr.codecs import ZstdCodec, BytesCodec
+
                 compressor = None  # Will use codecs parameter instead
                 codecs_chain = [BytesCodec(), ZstdCodec(level=1)]
             else:
                 # Zarr v2 uses numcodecs compressor
                 compressor = Blosc(cname="zstd", clevel=1, shuffle=Blosc.SHUFFLE)
                 codecs_chain = None
-            
+
             mode = "w"
             if self.frontend.append is True:
                 mode = "a"
-            
+
             # Use appropriate API based on zarr version
             if self._zarr_version >= 3:
                 self._root = zarr.open_group(
@@ -1545,12 +1546,15 @@ try:
                     ),
                     "dtype": self.frontend.dtype,
                 }
-                
+
                 if self._zarr_version >= 3:
                     # Zarr v3 uses chunk_key_encoding instead of dimension_separator
                     # and codecs instead of compressor
                     from zarr.core.chunk_key_encodings import DefaultChunkKeyEncoding
-                    chunk_config["chunk_key_encoding"] = DefaultChunkKeyEncoding(separator="/")
+
+                    chunk_config["chunk_key_encoding"] = DefaultChunkKeyEncoding(
+                        separator="/"
+                    )
                     chunk_config["codecs"] = codecs_chain
                     writer = self._root.zeros(name="0", **chunk_config)
                 else:

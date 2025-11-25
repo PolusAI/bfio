@@ -69,7 +69,7 @@ class TensorstoreReader(bfio.base_classes.TSAbstractReader):
         self.logger.debug(f"Level is {self.frontend.level}")
 
         # Detect zarr version
-        zarr_version = int(zarr.__version__.split('.')[0])
+        zarr_version = int(zarr.__version__.split(".")[0])
         self.logger.debug(f"Zarr version: {zarr.__version__}")
 
         root = None
