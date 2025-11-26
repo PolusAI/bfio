@@ -1,4 +1,4 @@
-# **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.4.10-dev0)
+# **B**io**F**ormats **I**nput/**O**utput utility (bfio 2.4.10)
 
 [![Documentation Status](https://readthedocs.org/projects/bfio/badge/?version=latest)](https://bfio.readthedocs.io/en/latest/?badge=latest)
 [![PyPI](https://img.shields.io/pypi/v/bfio)](https://pypi.org/project/bfio/)
@@ -50,15 +50,15 @@ be installed using pip:
 
 ## Docker
 
-### polusai/bfio:2.4.10-dev0
+### polusai/bfio:2.4.10
 
 Ubuntu based container with bfio and all dependencies (including Java).
 
-### polusai/bfio:2.4.10-dev0-imagej
+### polusai/bfio:2.4.10-imagej
 
 Same as above, except comes with ImageJ and PyImageJ.
 
-### polusai/bfio:2.4.10-dev0-tensorflow
+### polusai/bfio:2.4.10-tensorflow
 
 Tensorflow container with bfio installed.
 
