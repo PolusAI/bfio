@@ -38,9 +38,6 @@ RUN python3 -m pip install --upgrade pip --no-cache-dir
 # Copy the source
 COPY . /bfio_src
 
-# Apply m2 repo patch
-RUN git apply --directory=bfio_src /bfio_src/docker/m2_repo.patch
-
 # Install
 RUN python3 -m pip install /bfio_src --no-cache-dir
 
@@ -64,12 +61,13 @@ RUN mkdir -p /usr/share/maven/conf && \
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 \
           http://maven.apache.org/xsd/settings-1.0.0.xsd"> \
-          <localRepository>/etc/m2</localRepository> \
+          <localRepository>/etc/m2/repository</localRepository> \
           </settings>' \
           > /usr/share/maven/conf/settings.xml
 
-# Ensure the /etc/m2 directory exists
-RUN mkdir -p /etc/m2
+# Ensure the /etc/m2 directory and subdirectories exist
+RUN mkdir -p /etc/m2/repository
+RUN mkdir -p /etc/m2/jgo_cache
 
 # Set the correct permissions
 RUN chmod -R 777 ${EXEC_DIR} && \
@@ -77,6 +75,13 @@ RUN chmod -R 777 ${EXEC_DIR} && \
     chmod -R 777 /etc/m2
 
 RUN python3 -c 'import bfio; bfio.start()'
+
+# Verify that the JAR file exists somewhere within /etc/m2
+RUN echo "Verifying JAR files in /etc/m2:" && \
+    find /etc/m2 -name "formats-gpl-8.0.1.jar" -exec ls -lh {} \; && \
+    echo "First 10 JAR files in /etc/m2:" && \
+    find /etc/m2 -name "*.jar" | head -10
+
 RUN python3 -c 'import imagej; ij = imagej.init(); print(ij.getVersion())'
 
 # Set the correct permissions again, for sanity
