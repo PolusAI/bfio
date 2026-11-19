@@ -86,41 +86,6 @@ namespaces = false
 ]
 
 
-[tool.bumpversion]
-current_version = "2.5.0"
-commit = true
-tag = true
-commit_args = "--no-verify"
-parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)(\\-(?P<release>[a-z]+)(?P<build>\\d+))?"
-serialize = [
-    "{major}.{minor}.{patch}-{release}{build}",
-    "{major}.{minor}.{patch}"
-]
-
-[tool.bumpversion.parts.release]
-optional_value = "_"
-first_value = "dev"
-values = [
-    "dev",
-    "_"
-]
-
-[[tool.bumpversion.files]]
-filename = "src/bfio/VERSION"
-search = "{current_version}"
-replace = "{new_version}"
-
-[[tool.bumpversion.files]]
-filename = "requirements/requirements-base.txt"
-search = "bfio=={current_version}"
-replace = "bfio=={new_version}"
-
-[[tool.bumpversion.files]]
-filename = "README.md"
-search = "{current_version}"
-replace = "{new_version}"
-
-
 [tool.codespell]
 skip = "*.svg,*.html"
 ignore-words-list = "utput"
