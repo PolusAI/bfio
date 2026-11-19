@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 import unittest
-import requests, pathlib, shutil, logging, sys, os
+import pathlib, shutil, logging, sys, os
 import bfio
 import numpy as np
 import tempfile
-from ome_zarr.utils import download as zarr_download
+
+try:
+    from ._data import PYRAMID_ZARR, V3_ZARR, fetch, fetch_zarr
+except ImportError:  # run via `unittest discover -s tests`
+    from _data import PYRAMID_ZARR, V3_ZARR, fetch, fetch_zarr
 
 TEST_IMAGES = {
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
-    "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
     "0.tif": "https://osf.io/j6aer/download",
 }
 
@@ -28,21 +31,12 @@ def setUpModule():
     """Download images for testing"""
     TEST_DIR.mkdir(exist_ok=True)
 
+    fetch_zarr(PYRAMID_ZARR, TEST_DIR)
+
     for file, url in TEST_IMAGES.items():
         logger.info(f"setup - Downloading: {file}")
-
-        if not file.endswith(".zarr"):
-            if TEST_DIR.joinpath(file).exists():
-                continue
-
-            r = requests.get(url)
-
-            with open(TEST_DIR.joinpath(file), "wb") as fw:
-                fw.write(r.content)
-        else:
-            if TEST_DIR.joinpath(file).exists():
-                shutil.rmtree(TEST_DIR.joinpath(file))
-            zarr_download(url, str(TEST_DIR))
+        if not TEST_DIR.joinpath(file).exists():
+            fetch(url, TEST_DIR.joinpath(file))
 
 
 def tearDownModule():
@@ -109,7 +103,7 @@ class TestPythonZarrWriter(unittest.TestCase):
 
     def test_write_zarr_append_no_file(self):
 
-        with bfio.BioReader(str(TEST_DIR.joinpath("5025551.zarr"))) as br:
+        with bfio.BioReader(str(TEST_DIR.joinpath(PYRAMID_ZARR))) as br:
 
             actual_shape = br.shape
             actual_dtype = br.dtype
@@ -136,7 +130,7 @@ class TestPythonZarrWriter(unittest.TestCase):
 
     def test_write_zarr_append_file_exist(self):
 
-        with bfio.BioReader(str(TEST_DIR.joinpath("5025551.zarr"))) as br:
+        with bfio.BioReader(str(TEST_DIR.joinpath(PYRAMID_ZARR))) as br:
 
             actual_shape = br.shape
             actual_dtype = br.dtype
@@ -151,14 +145,14 @@ class TestPythonZarrWriter(unittest.TestCase):
             ) as bw:
 
                 expanded = np.expand_dims(actual_image, axis=-1)
-                bw[:, :, :, 0:13, :] = expanded[:, :, :, 0:13, :]
+                bw[:, :, :, 0:2, :] = expanded[:, :, :, 0:2, :]
 
             with bfio.BioWriter(
                 test_file_path, metadata=actual_mdata, backend="zarr", append=True
             ) as bw:
 
                 expanded = np.expand_dims(actual_image, axis=-1)
-                bw[:, :, :, 13:, :] = expanded[:, :, :, 13:, :]
+                bw[:, :, :, 2:, :] = expanded[:, :, :, 2:, :]
             with bfio.BioReader(test_file_path) as br:
 
                 assert br.shape == actual_shape
@@ -171,7 +165,7 @@ class TestOmeZarrWriter(unittest.TestCase):
 
     def test_write_zarr_tensorstore(self):
 
-        with bfio.BioReader(str(TEST_DIR.joinpath("5025551.zarr"))) as br:
+        with bfio.BioReader(str(TEST_DIR.joinpath(PYRAMID_ZARR))) as br:
 
             actual_shape = br.shape
             actual_dtype = br.dtype
