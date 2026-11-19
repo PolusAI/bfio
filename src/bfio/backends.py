@@ -170,7 +170,17 @@ class PythonReader(bfio.base_classes.AbstractReader):
             self._tiff_frame = tifffile.TiffFrame(parent, index)
 
         def get_offset(self):
-            return self._tiff_frame._nextifd()
+            # tifffile removed the private TiffFrame._nextifd(); reimplement it
+            # using only the public TiffFile/TiffFormat attributes.
+            f = self._tiff_frame
+            fh, tiff = f.parent.filehandle, f.parent.tiff
+            fh.seek(f.offset)
+            tagno = struct.unpack(tiff.tagnoformat, fh.read(tiff.tagnosize))[0]
+            if tiff.is_ndpi:
+                fh.seek(f.offset + tiff.tagnosize + tagno * 16 + 8)
+            else:
+                fh.seek(f.offset + tiff.tagnosize + tagno * tiff.tagsize)
+            return int(struct.unpack(tiff.offsetformat, fh.read(tiff.offsetsize))[0])
 
         def get_index(self):
             return self._tiff_frame.index
