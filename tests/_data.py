@@ -8,7 +8,7 @@ import zipfile
 # Pinned to a commit of sameeul/polus-test-data so the data cannot change.
 DATA_REPO = (
     "https://raw.githubusercontent.com/sameeul/polus-test-data/"
-    "7ef91e6ca3c6202bd81c105440471049c0977d38/bfio"
+    "c5630e67ba6394b9abf73dbb85ac1fdce4b50528/bfio"
 )
 # zarr v2 (NGFF 0.4), 2 levels: (Y,X,Z,C) = (300,302,1,4) and (150,151,1,4)
 PYRAMID_ZARR = "small_5d_pyramid.zarr"
