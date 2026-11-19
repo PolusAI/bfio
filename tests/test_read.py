@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import unittest
-import requests, pathlib, shutil, logging, sys
+import pathlib, shutil, logging, sys
 import bfio
 import numpy as np
 import pickle
@@ -8,11 +8,13 @@ import random
 import tifffile
 from PIL import Image
 import zarr
-from ome_zarr.utils import download as zarr_download
+
+try:
+    from ._data import PYRAMID_ZARR, V3_ZARR, fetch, fetch_zarr
+except ImportError:  # run via `unittest discover -s tests`
+    from _data import PYRAMID_ZARR, V3_ZARR, fetch, fetch_zarr
 
 TEST_IMAGES = {
-    "ExpD_chicken_embryo_MIP.ome.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.5/idr0066/ExpD_chicken_embryo_MIP.ome.zarr",
-    "5025551.zarr": "https://uk1s3.embassy.ebi.ac.uk/idr/zarr/v0.4/idr0054A/5025551.zarr",
     "Plate1-Blue-A-12-Scene-3-P3-F2-03.czi": "https://downloads.openmicroscopy.org/images/Zeiss-CZI/idr0011/Plate1-Blue-A_TS-Stinger/Plate1-Blue-A-12-Scene-3-P3-F2-03.czi",
     "0.tif": "https://osf.io/j6aer/download",
     "img_r001_c001.ome.tif": "https://github.com/usnistgov/WIPP/raw/master/data/PyramidBuilding/inputCollection/img_r001_c001.ome.tif",
@@ -35,21 +37,13 @@ def setUpModule():
     """Download images for testing"""
     TEST_DIR.mkdir(exist_ok=True)
 
+    fetch_zarr(PYRAMID_ZARR, TEST_DIR)
+    fetch_zarr(V3_ZARR, TEST_DIR)
+
     for file, url in TEST_IMAGES.items():
         logger.info(f"setup - Downloading: {file}")
-
-        if not file.endswith(".zarr"):
-            if TEST_DIR.joinpath(file).exists():
-                continue
-
-            r = requests.get(url)
-
-            with open(TEST_DIR.joinpath(file), "wb") as fw:
-                fw.write(r.content)
-        else:
-            if TEST_DIR.joinpath(file).exists():
-                shutil.rmtree(TEST_DIR.joinpath(file))
-            zarr_download(url, str(TEST_DIR))
+        if not TEST_DIR.joinpath(file).exists():
+            fetch(url, TEST_DIR.joinpath(file))
 
     """Load the czi image, and save as a npy file for further testing."""
     with bfio.BioReader(
@@ -334,23 +328,21 @@ class TestZarrReader(unittest.TestCase):
 
     def test_sub_resolution_read(self):
         """Testing multi-resolution read"""
-        with bfio.BioReader(TEST_DIR.joinpath("5025551.zarr")) as br:
+        with bfio.BioReader(TEST_DIR.joinpath(PYRAMID_ZARR)) as br:
             get_dims(br)
-            self.assertEqual(br.shape, (2700, 2702, 1, 27))
-        with bfio.BioReader(TEST_DIR.joinpath("5025551.zarr"), level=1) as br:
+            self.assertEqual(br.shape, (300, 302, 1, 4))
+        with bfio.BioReader(TEST_DIR.joinpath(PYRAMID_ZARR), level=1) as br:
             get_dims(br)
-            self.assertEqual(br.shape, (1350, 1351, 1, 27))
+            self.assertEqual(br.shape, (150, 151, 1, 4))
 
     def test_read_zarr_v3(self):
         """Testing zarr v3 format (NGFF 0.5) read with zarr backend"""
-        with bfio.BioReader(
-            TEST_DIR.joinpath("ExpD_chicken_embryo_MIP.ome.zarr"), backend="zarr3"
-        ) as br:
+        with bfio.BioReader(TEST_DIR.joinpath(V3_ZARR), backend="zarr3") as br:
             get_dims(br)
             # Verify it's using the zarr backend
             self.assertEqual(br._backend_name, "zarr3")
             # Verify dimensions are read correctly
-            self.assertEqual(br.shape, (8978, 6510))
+            self.assertEqual(br.shape, (300, 302, 1, 4))
             # Verify we can actually read data
             data = br[:100, :100, 0, 0]
             self.assertEqual(data.shape, (100, 100))
@@ -391,26 +383,24 @@ class TestZarrTSReader(unittest.TestCase):
     def test_sub_resolution_read(self):
         """Testing multi-resolution read"""
         with bfio.BioReader(
-            TEST_DIR.joinpath("5025551.zarr"), backend="tensorstore"
+            TEST_DIR.joinpath(PYRAMID_ZARR), backend="tensorstore"
         ) as br:
             get_dims(br)
-            self.assertEqual(br.shape, (2700, 2702, 1, 27))
+            self.assertEqual(br.shape, (300, 302, 1, 4))
         with bfio.BioReader(
-            TEST_DIR.joinpath("5025551.zarr"), backend="tensorstore", level=1
+            TEST_DIR.joinpath(PYRAMID_ZARR), backend="tensorstore", level=1
         ) as br:
             get_dims(br)
-            self.assertEqual(br.shape, (1350, 1351, 1, 27))
+            self.assertEqual(br.shape, (150, 151, 1, 4))
 
     def test_read_zarr_v3(self):
         """Testing zarr v3 format (NGFF 0.5) read with tensorstore backend"""
-        with bfio.BioReader(
-            TEST_DIR.joinpath("ExpD_chicken_embryo_MIP.ome.zarr"), backend="tensorstore"
-        ) as br:
+        with bfio.BioReader(TEST_DIR.joinpath(V3_ZARR), backend="tensorstore") as br:
             get_dims(br)
             # Verify it's using the tensorstore backend
             self.assertEqual(br._backend_name, "tensorstore")
             # Verify dimensions are read correctly
-            self.assertEqual(br.shape, (8978, 6510))
+            self.assertEqual(br.shape, (300, 302, 1, 4))
             # Verify we can actually read data
             data = br[:100, :100, 0, 0]
             self.assertEqual(data.shape, (100, 100))
@@ -421,22 +411,22 @@ class TestZarrTSReader(unittest.TestCase):
         """Testing zarr v3 multi-resolution read with tensorstore backend"""
         # Test resolution level 0 (highest resolution)
         with bfio.BioReader(
-            TEST_DIR.joinpath("ExpD_chicken_embryo_MIP.ome.zarr"),
+            TEST_DIR.joinpath(V3_ZARR),
             backend="tensorstore",
             level=0,
         ) as br:
             self.assertEqual(br._backend_name, "tensorstore")
-            self.assertEqual(br.shape, (8978, 6510))
+            self.assertEqual(br.shape, (300, 302, 1, 4))
 
         # Test resolution level 1
         with bfio.BioReader(
-            TEST_DIR.joinpath("ExpD_chicken_embryo_MIP.ome.zarr"),
+            TEST_DIR.joinpath(V3_ZARR),
             backend="tensorstore",
             level=1,
         ) as br:
             self.assertEqual(br._backend_name, "tensorstore")
             # Level 1 should be downsampled by 2x
-            self.assertEqual(br.shape, (4489, 3255))
+            self.assertEqual(br.shape, (150, 151, 1, 4))
 
 
 class TestZarrMetadata(unittest.TestCase):
