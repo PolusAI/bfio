@@ -67,7 +67,7 @@ Repository = "https://github.com/PolusAI/bfio"
 
 
 [tool.setuptools.dynamic]
-version = {attr = "bfio.__version__"}
+version = {file = ["src/bfio/VERSION"]}
 
 
 [tool.setuptools]
